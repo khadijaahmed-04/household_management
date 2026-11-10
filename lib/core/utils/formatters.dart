@@ -1,0 +1,56 @@
+import 'package:intl/intl.dart';
+
+class AppFormatters {
+  AppFormatters._();
+
+  static final DateFormat _ddMmmYyyy = DateFormat('dd MMM yyyy');
+  static final DateFormat _ddMmmYyyyTime = DateFormat('dd MMM yyyy, HH:mm');
+  static final DateFormat _monthYear = DateFormat('MMMM yyyy');
+
+  /// Formats monetary values in Tanzanian Shillings (e.g. `TSh 100,000`)
+  /// or any other configured household currency symbol.
+  static String formatCurrency(
+    num amount, {
+    String symbol = 'TSh',
+    int decimalDigits = 0,
+    bool showSign = false,
+  }) {
+    final isNegative = amount < 0;
+    final absValue = amount.abs();
+    final formatter = NumberFormat.currency(
+      locale: 'en_US',
+      symbol: '',
+      decimalDigits: decimalDigits,
+    );
+    final formattedNumber = formatter.format(absValue).trim();
+    if (showSign) {
+      final prefix = isNegative ? '-' : '+';
+      return '$prefix$symbol $formattedNumber';
+    }
+    return isNegative
+        ? '-$symbol $formattedNumber'
+        : '$symbol $formattedNumber';
+  }
+
+  /// Formats a DateTime using the required Tanzanian standard `DD MMM YYYY` (e.g. `05 Nov 2026`).
+  static String formatDate(DateTime date) {
+    return _ddMmmYyyy.format(date);
+  }
+
+  /// Formats a DateTime with time (`05 Nov 2026, 14:30`).
+  static String formatDateTime(DateTime dateTime) {
+    return _ddMmmYyyyTime.format(dateTime);
+  }
+
+  /// Formats a month header (`November 2026`).
+  static String formatMonthYear(DateTime date) {
+    return _monthYear.format(date);
+  }
+
+  /// Converts a UTC DateTime into `Africa/Dar_es_Salaam` (UTC+3).
+  static DateTime toDarEsSalaamTime(DateTime input) {
+    final utc = input.toUtc();
+    return utc.add(const Duration(hours: 3));
+  }
+}
+

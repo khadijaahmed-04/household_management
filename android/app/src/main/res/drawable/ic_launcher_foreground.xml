@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cute White Smiling House matching the NyumbaSmart reference design -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 L76,43 C77.5,44 78,45.5 78,47.5 L78,72 C78,75.3 75.3,78 72,78 L36,78 C32.7,78 30,75.3 30,72 L30,47.5 C30,45.5 30.5,44 32,43 L54,28 Z" />
+    <!-- Left happy curved eye (◠) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#167D52"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M38,59 Q44,52 50,59" />
+    <!-- Right happy curved eye (◠) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#167D52"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M58,59 Q64,52 70,59" />
+</vector>
