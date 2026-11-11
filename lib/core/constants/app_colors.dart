@@ -13,7 +13,7 @@ class AppColors {
 
   /// Soft green: #E4F3EA
   static const Color softGreen = Color(0xFFE4F3EA);
-  static const Color softGreenBorder = Color(0xFFC5E4D2);
+  static const Color softGreenBorder = Color(0xFF82DAA8);
 
   /// App background: #F7F8F4
   static const Color background = Color(0xFFF7F8F4);
@@ -56,7 +56,7 @@ class AppColors {
   static const Color darkTextPrimary = Color(0xFFECF5F0);
   static const Color darkTextSecondary = Color(0xFF9AB0A4);
   static const Color darkSoftGreen = Color(0xFF1B3B2D);
-  static const Color darkSoftGreenBorder = Color(0xFF285742);
+  static const Color darkSoftGreenBorder = Color(0xFF3D916B);
 
   // ===========================================================================
   // BACKWARD-COMPATIBLE ALIASES (Mapped to the Green Design System)

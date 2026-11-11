@@ -112,9 +112,11 @@ class HouseholdSelectionScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(
                       color: isSelected
-                          ? AppColors.primaryBlue
-                          : (isDark ? AppColors.darkBorder : AppColors.border),
-                      width: isSelected ? 2 : 1,
+                          ? AppColors.primaryGreen
+                          : (isDark
+                              ? AppColors.darkSoftGreenBorder
+                              : AppColors.softGreenBorder),
+                      width: isSelected ? 2 : 1.2,
                     ),
                   ),
                   child: InkWell(
@@ -743,10 +745,17 @@ class HouseholdDetailsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           ListTile(
-            tileColor: Colors.white,
+            tileColor: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.darkSurface
+                : Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.border),
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkSoftGreenBorder
+                    : AppColors.softGreenBorder,
+                width: 1.2,
+              ),
             ),
             leading: const Icon(Icons.group_outlined, color: AppColors.primaryBlue),
             title: Text('Household Members (${members.length})'),
@@ -756,10 +765,17 @@ class HouseholdDetailsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           ListTile(
-            tileColor: Colors.white,
+            tileColor: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.darkSurface
+                : Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.border),
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkSoftGreenBorder
+                    : AppColors.softGreenBorder,
+                width: 1.2,
+              ),
             ),
             leading: const Icon(Icons.category_outlined, color: AppColors.secondaryOrange),
             title: Text('Expense Categories (${categories.length})'),
@@ -776,10 +792,12 @@ class HouseholdDetailsScreen extends ConsumerWidget {
 /// 5. MANAGE HOUSEHOLD MEMBERS & MEMBER DETAILS SCREEN
 class ManageHouseholdMembersScreen extends ConsumerStatefulWidget {
   final bool embeddedInTab;
+  final VoidCallback? onBack;
 
   const ManageHouseholdMembersScreen({
     super.key,
     this.embeddedInTab = false,
+    this.onBack,
   });
 
   @override
@@ -1113,7 +1131,13 @@ class _ManageHouseholdMembersScreenState
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        automaticallyImplyLeading: !widget.embeddedInTab,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: widget.onBack,
+              )
+            : null,
         title: Text(
           '${ref.tr('Household Members', 'Wanafamilia')} • ${household?.name ?? ''}',
         ),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
-/// Cute white house logo with happy curved eyes (◠ ◠) matching the reference design.
+/// Modern architectural house emblem with rising financial/prediction bars
+/// and a smart spark dot, representing NyumbaSmart's household wallet & insights.
 class NyumbaSmartLogo extends StatelessWidget {
   final double size;
   final Color houseColor;
@@ -20,22 +21,22 @@ class NyumbaSmartLogo extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _SmilingHousePainter(
+        painter: _NyumbaSmartEmblemPainter(
           houseColor: houseColor,
-          eyeColor: eyeColor,
+          barColor: eyeColor,
         ),
       ),
     );
   }
 }
 
-class _SmilingHousePainter extends CustomPainter {
+class _NyumbaSmartEmblemPainter extends CustomPainter {
   final Color houseColor;
-  final Color eyeColor;
+  final Color barColor;
 
-  const _SmilingHousePainter({
+  const _NyumbaSmartEmblemPainter({
     required this.houseColor,
-    required this.eyeColor,
+    required this.barColor,
   });
 
   @override
@@ -48,82 +49,76 @@ class _SmilingHousePainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
 
-    // House body with pitched roof and rounded corners matching the reference icon
-    final path = Path();
-    final roofPeakX = w * 0.50;
-    final roofPeakY = h * 0.10;
-    final leftWallX = w * 0.12;
-    final rightWallX = w * 0.88;
-    final eaveY = h * 0.37;
-    final bottomY = h * 0.88;
-    final cornerRadius = w * 0.13;
+    // Clean modern architectural house silhouette with pitched roof & rounded eaves
+    final housePath = Path()
+      ..moveTo(w * 0.46, h * 0.14)
+      ..quadraticBezierTo(w * 0.50, h * 0.10, w * 0.54, h * 0.14)
+      ..lineTo(w * 0.89, h * 0.41)
+      ..quadraticBezierTo(w * 0.92, h * 0.44, w * 0.87, h * 0.46)
+      ..lineTo(w * 0.82, h * 0.46)
+      ..lineTo(w * 0.82, h * 0.79)
+      ..quadraticBezierTo(w * 0.82, h * 0.88, w * 0.73, h * 0.88)
+      ..lineTo(w * 0.27, h * 0.88)
+      ..quadraticBezierTo(w * 0.18, h * 0.88, w * 0.18, h * 0.79)
+      ..lineTo(w * 0.18, h * 0.46)
+      ..lineTo(w * 0.13, h * 0.46)
+      ..quadraticBezierTo(w * 0.08, h * 0.44, w * 0.11, h * 0.41)
+      ..close();
 
-    path.moveTo(roofPeakX - w * 0.05, roofPeakY + h * 0.02);
-    path.quadraticBezierTo(
-      roofPeakX,
-      roofPeakY - h * 0.02,
-      roofPeakX + w * 0.05,
-      roofPeakY + h * 0.02,
-    );
-    // Right roof slope
-    path.lineTo(rightWallX - w * 0.03, eaveY - h * 0.03);
-    path.quadraticBezierTo(
-      rightWallX,
-      eaveY,
-      rightWallX,
-      eaveY + h * 0.06,
-    );
-    // Right wall down to bottom-right corner
-    path.lineTo(rightWallX, bottomY - cornerRadius);
-    path.quadraticBezierTo(
-      rightWallX,
-      bottomY,
-      rightWallX - cornerRadius,
-      bottomY,
-    );
-    // Bottom edge to bottom-left corner
-    path.lineTo(leftWallX + cornerRadius, bottomY);
-    path.quadraticBezierTo(
-      leftWallX,
-      bottomY,
-      leftWallX,
-      bottomY - cornerRadius,
-    );
-    // Left wall up to eave
-    path.lineTo(leftWallX, eaveY + h * 0.06);
-    path.quadraticBezierTo(
-      leftWallX,
-      eaveY,
-      leftWallX + w * 0.03,
-      eaveY - h * 0.03,
-    );
-    path.close();
+    canvas.drawPath(housePath, housePaint);
 
-    canvas.drawPath(path, housePaint);
-
-    // Two happy curved eyes (◠ ◠) inside the house
-    final eyePaint = Paint()
-      ..color = eyeColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.062
-      ..strokeCap = StrokeCap.round
+    // Three ascending rounded finance / prediction bars inside the house
+    final barPaint = Paint()
+      ..color = barColor
+      ..style = PaintingStyle.fill
       ..isAntiAlias = true;
 
-    final eyeY = h * 0.57;
-    final leftEye = Path()
-      ..moveTo(w * 0.23, eyeY)
-      ..quadraticBezierTo(w * 0.34, eyeY - h * 0.11, w * 0.45, eyeY);
-    canvas.drawPath(leftEye, eyePaint);
+    final barWidth = w * 0.105;
+    final barRadius = Radius.circular(barWidth * 0.48);
+    final bottomY = h * 0.77;
 
-    final rightEye = Path()
-      ..moveTo(w * 0.55, eyeY)
-      ..quadraticBezierTo(w * 0.66, eyeY - h * 0.11, w * 0.77, eyeY);
-    canvas.drawPath(rightEye, eyePaint);
+    // Short bar (left)
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(w * 0.285, h * 0.60, w * 0.285 + barWidth, bottomY),
+        barRadius,
+      ),
+      barPaint,
+    );
+
+    // Medium bar (center)
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(w * 0.447, h * 0.50, w * 0.447 + barWidth, bottomY),
+        barRadius,
+      ),
+      barPaint,
+    );
+
+    // Tall bar (right - highlighted emerald mint)
+    final tallBarPaint = Paint()
+      ..color = const Color(0xFF1F9A64)
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(w * 0.61, h * 0.39, w * 0.61 + barWidth, bottomY),
+        barRadius,
+      ),
+      tallBarPaint,
+    );
+
+    // Subtle smart insight dot above left bar
+    canvas.drawCircle(
+      Offset(w * 0.338, h * 0.47),
+      w * 0.042,
+      tallBarPaint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _SmilingHousePainter oldDelegate) =>
-      oldDelegate.houseColor != houseColor || oldDelegate.eyeColor != eyeColor;
+  bool shouldRepaint(covariant _NyumbaSmartEmblemPainter oldDelegate) =>
+      oldDelegate.houseColor != houseColor || oldDelegate.barColor != barColor;
 }
 
 /// Global subtle layered-wave background in our green palette (#F7F8F4, #E4F3EA, #D0EAD9)

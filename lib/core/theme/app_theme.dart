@@ -136,7 +136,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: const BorderSide(color: AppColors.softGreenBorder, width: 1.4),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -354,7 +354,10 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: AppColors.darkBorder, width: 1),
+          side: const BorderSide(
+            color: AppColors.darkSoftGreenBorder,
+            width: 1.4,
+          ),
         ),
       ),
       dialogTheme: DialogThemeData(

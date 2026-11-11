@@ -13,7 +13,9 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../households/presentation/providers/household_providers.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onBack;
+
+  const SettingsScreen({super.key, this.onBack});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -190,105 +192,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _showEditAlertPhoneDialog() async {
+  Future<void> _showDailyReminderTimePicker() async {
     final alertSettings = ref.read(autoAlertSettingsProvider);
-    final phoneCtrl = TextEditingController(text: alertSettings.preferredPhone);
-    String selectedChannel = alertSettings.preferredChannel;
-
-    await showDialog<void>(
+    final initialTime = TimeOfDay(
+      hour: alertSettings.reminderHour,
+      minute: alertSettings.reminderMinute,
+    );
+    final picked = await showTimePicker(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(
-            ref.tr(
-              'Preferred Automatic Alert Number',
-              'Namba ya Kupokea Tahadhari za Moja kwa Moja',
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                ref.tr(
-                  'When any supply (LUKU, Gas, Water, Groceries) has <= 3 days left, NyumbaSmart will automatically send an alert to this number even if you do not open the app.',
-                  'Bidhaa ikibakiza siku <= 3, NyumbaSmart itatuma ujumbe wa tahadhari moja kwa moja kwenye namba hii.',
-                ),
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: ref.tr(
-                    'Alert Phone Number (+255...)',
-                    'Namba ya Simu (+255...)',
-                  ),
-                  prefixIcon: const Icon(Icons.phone_android_rounded),
-                ),
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                value: selectedChannel,
-                decoration: InputDecoration(
-                  labelText: ref.tr(
-                    'Preferred Automatic Channel',
-                    'Njia ya Kutuma Tahadhari',
-                  ),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: 'sms',
-                    child: Text(
-                      ref.tr(
-                        '📲 Auto Direct SMS (Background)',
-                        '📲 SMS ya Moja kwa Moja',
-                      ),
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'whatsapp',
-                    child: Text(
-                      ref.tr(
-                        '💬 WhatsApp Message',
-                        '💬 Ujumbe wa WhatsApp',
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => selectedChannel = v);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(ref.tr('Cancel', 'Ghairi')),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (phoneCtrl.text.trim().isEmpty) return;
-                await ref
-                    .read(autoAlertSettingsProvider.notifier)
-                    .saveAlertPreferences(
-                      preferredPhone: phoneCtrl.text.trim(),
-                      preferredChannel: selectedChannel,
-                    );
-                await ShareLauncher.requestAlertPermissions();
-                if (ctx.mounted) Navigator.of(ctx).pop();
-              },
-              child: Text(ref.tr('Save Number', 'Hifadhi Namba')),
-            ),
-          ],
-        ),
+      initialTime: initialTime,
+      helpText: ref.tr(
+        'Select Daily Supply Reminder Time',
+        'Chagua Muda wa Tahadhari za Kila Siku',
       ),
     );
+    if (picked != null) {
+      await ref.read(autoAlertSettingsProvider.notifier).saveAlertPreferences(
+            reminderHour: picked.hour,
+            reminderMinute: picked.minute,
+          );
+      await ShareLauncher.requestAlertPermissions();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primaryGreen,
+            content: Text(
+              ref.tr(
+                'Daily reminder time set to ${picked.format(context)}',
+                'Muda wa tahadhari umewekwa kuwa ${picked.format(context)}',
+              ),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -309,6 +246,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: widget.onBack,
+              )
+            : null,
         title: Text(
           ref.tr('More & Settings', 'Zaidi na Mipangilio'),
         ),
@@ -318,8 +262,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           SyncStatusBanner(
             isOnline: syncState.isOnline,
-            message: syncState.lastSyncMessage ??
-                ref.tr('Synced', 'Imelandanishwa'),
+            message:
+                syncState.lastSyncMessage ?? ref.tr('Synced', 'Imelandanishwa'),
           ),
           const SizedBox(height: 16),
 
@@ -371,9 +315,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Icon(
                   Icons.edit_outlined,
                   size: 18,
-                  color: isDark
-                      ? const Color(0xFF34C486)
-                      : AppColors.primaryGreen,
+                  color:
+                      isDark ? const Color(0xFF34C486) : AppColors.primaryGreen,
                 ),
               ],
             ),
@@ -382,7 +325,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // 2. Appearance / Theme Mode (Light & Dark Mode)
           SectionHeader(
-            title: ref.tr('Appearance (Light / Dark Mode)', 'Muonekano wa Programu'),
+            fontSize: 14.5,
+            title: ref.tr(
+                'Appearance (Light / Dark Mode)', 'Muonekano wa Programu'),
           ),
           AppSurfaceCard(
             padding: const EdgeInsets.all(16),
@@ -408,7 +353,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                          fontSize: 13.5,
                           color: primaryText,
                         ),
                       ),
@@ -431,6 +376,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ? AppColors.darkSoftGreen
                             : AppColors.softGreen,
                         labelStyle: TextStyle(
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                           color: currentThemeMode == ThemeMode.light
                               ? (isDark
@@ -459,6 +405,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ? AppColors.darkSoftGreen
                             : AppColors.softGreen,
                         labelStyle: TextStyle(
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                           color: currentThemeMode == ThemeMode.dark
                               ? (isDark
@@ -482,6 +429,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // 3. Language / Lugha Switcher Card
           SectionHeader(
+            fontSize: 14.5,
             title: ref.tr('Language / Lugha ya Programu', 'Lugha ya Programu'),
           ),
           AppSurfaceCard(
@@ -506,7 +454,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                          fontSize: 13.5,
                           color: primaryText,
                         ),
                       ),
@@ -527,6 +475,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ? AppColors.darkSoftGreen
                             : AppColors.softGreen,
                         labelStyle: TextStyle(
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                           color: currentLang == AppLanguage.english
                               ? (isDark
@@ -552,6 +501,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ? AppColors.darkSoftGreen
                             : AppColors.softGreen,
                         labelStyle: TextStyle(
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                           color: currentLang == AppLanguage.swahili
                               ? (isDark
@@ -573,6 +523,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 20),
 
           SectionHeader(
+            fontSize: 14.5,
             title: ref.tr(
               'Household, Analytics & Categories',
               'Nyumba, Ripoti na Makundi',
@@ -580,372 +531,441 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           AppSurfaceCard(
             padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(
-                    Icons.home_work_outlined,
-                    color: AppColors.primaryGreen,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Switch or Manage Households',
-                      'Badilisha au Simamia Nyumba',
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    '${ref.tr('Active', 'Inayotumika')}: ${household?.name ?? 'None'}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/households'),
+            child: ListTileTheme(
+              data: ListTileThemeData(
+                dense: true,
+                titleTextStyle: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: primaryText,
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.pie_chart_outline_rounded,
-                    color: AppColors.info,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Reports & Monthly Analytics',
-                      'Ripoti na Takwimu za Mwezi',
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Category breakdown, member contributions & export',
-                      'Mchanganuo wa matumizi, michango na ripoti',
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/reports'),
+                subtitleTextStyle: TextStyle(
+                  fontSize: 11.5,
+                  color: secondaryText,
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.group_outlined,
-                    color: AppColors.primaryGreen,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Manage Household Members',
-                      'Simamia Wanafamilia / Washiriki',
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.home_work_outlined,
+                      size: 20,
+                      color: AppColors.primaryGreen,
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Add or view members sharing expenses',
-                      'Ongeza au angalia wanaochangia matumizi',
+                    title: Text(
+                      ref.tr(
+                        'Switch or Manage Households',
+                        'Badilisha au Simamia Nyumba',
+                      ),
                     ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/households/members'),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.category_outlined,
-                    color: AppColors.warning,
-                  ),
-                  title: Text(
-                    ref.tr('Expense Categories', 'Makundi ya Matumizi'),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Create, rename, or deactivate categories',
-                      'Unda au badilisha makundi ya matumizi',
+                    subtitle: Text(
+                      '${ref.tr('Active', 'Inayotumika')}: ${household?.name ?? 'None'}',
                     ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/households'),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/households/categories'),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.payments_outlined,
-                    color: AppColors.primaryGreen,
-                  ),
-                  title: Text(
-                    ref.tr('Currency & Region', 'Sarafu na Eneo'),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    '${household?.currencyCode ?? 'TZS'} (${household?.currencySymbol ?? 'TSh'}) • ${household?.timezone ?? 'Africa/Dar_es_Salaam'}',
-                  ),
-                  trailing: const Icon(Icons.edit_outlined, size: 18),
-                  onTap: _showCurrencyDialog,
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.cleaning_services_outlined,
-                    color: AppColors.warning,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Start Fresh / Clear Demo Data',
-                      'Anza Upya / Futa Data ya Mfano',
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: 20,
+                      color: AppColors.info,
                     ),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
+                    title: Text(
+                      ref.tr(
+                        'Reports & Monthly Analytics',
+                        'Ripoti na Takwimu za Mwezi',
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        'Category breakdown, member contributions & export',
+                        'Mchanganuo wa matumizi, michango na ripoti',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/reports'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.group_outlined,
+                      size: 20,
+                      color: AppColors.primaryGreen,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Manage Household Members',
+                        'Simamia Wanafamilia / Washiriki',
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        'Add or view members sharing expenses',
+                        'Ongeza au angalia wanaochangia matumizi',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/households/members'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.category_outlined,
+                      size: 20,
                       color: AppColors.warning,
                     ),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Reset current household balance to 0 and clear sample transactions',
-                      'Weka salio kuwa 0 na ufute miamala ya mfano',
+                    title: Text(
+                      ref.tr('Expense Categories', 'Makundi ya Matumizi'),
                     ),
-                  ),
-                  trailing: const Icon(
-                    Icons.restart_alt_rounded,
-                    color: AppColors.warning,
-                  ),
-                  onTap: () async {
-                    if (household == null) return;
-                    final confirmed = await showDestructiveConfirmationDialog(
-                      context: context,
-                      title: ref.tr(
-                        'Clear Demo Data & Start Fresh?',
-                        'Futa Data ya Mfano na Uanze Upya?',
+                    subtitle: Text(
+                      ref.tr(
+                        'Create, rename, or deactivate categories',
+                        'Unda au badilisha makundi ya matumizi',
                       ),
-                      message: ref.tr(
-                        'This will reset ${household.name}\'s shared wallet balance to 0 and clear its sample transactions and consumption history so you can record your real household data.',
-                        'Hii itaweka salio la ${household.name} kuwa 0 na kufuta miamala ya mfano ili uanze kurekodi data zako halisi.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/households/categories'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.payments_outlined,
+                      size: 20,
+                      color: AppColors.primaryGreen,
+                    ),
+                    title: Text(
+                      ref.tr('Currency & Region', 'Sarafu na Eneo'),
+                    ),
+                    subtitle: Text(
+                      '${household?.currencyCode ?? 'TZS'} (${household?.currencySymbol ?? 'TSh'}) • ${household?.timezone ?? 'Africa/Dar_es_Salaam'}',
+                    ),
+                    trailing: const Icon(Icons.edit_outlined, size: 16),
+                    onTap: _showCurrencyDialog,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.cleaning_services_outlined,
+                      size: 20,
+                      color: AppColors.warning,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Start Fresh / Clear Demo Data',
+                        'Anza Upya / Futa Data ya Mfano',
                       ),
-                      confirmLabel: ref.tr('Start Fresh', 'Anza Upya'),
-                    );
-                    if (confirmed && context.mounted) {
-                      await ref
-                          .read(householdLedgerRepositoryProvider)
-                          .clearHouseholdDemoData(
-                            householdId: household.id,
-                            actorUserId: ref.read(currentUserIdProvider),
-                          );
-                      ref.read(ledgerRevisionProvider.notifier).state++;
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: AppColors.primaryGreen,
-                            content: Text(
-                              ref.tr(
-                                '${household.name} has been reset to 0. Ready for your real data!',
-                                '${household.name} imewekwa upya kuwa 0. Tayari kwa data zako halisi!',
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        'Reset current household balance to 0 and clear sample transactions',
+                        'Weka salio kuwa 0 na ufute miamala ya mfano',
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.restart_alt_rounded,
+                      size: 18,
+                      color: AppColors.warning,
+                    ),
+                    onTap: () async {
+                      if (household == null) return;
+                      final confirmed =
+                          await showDestructiveConfirmationDialog(
+                        context: context,
+                        title: ref.tr(
+                          'Clear Demo Data & Start Fresh?',
+                          'Futa Data ya Mfano na Uanze Upya?',
+                        ),
+                        message: ref.tr(
+                          'This will reset ${household.name}\'s shared wallet balance to 0 and clear its sample transactions and consumption history so you can record your real household data.',
+                          'Hii itaweka salio la ${household.name} kuwa 0 na kufuta miamala ya mfano ili uanze kurekodi data zako halisi.',
+                        ),
+                        confirmLabel: ref.tr('Start Fresh', 'Anza Upya'),
+                      );
+                      if (confirmed && context.mounted) {
+                        await ref
+                            .read(householdLedgerRepositoryProvider)
+                            .clearHouseholdDemoData(
+                              householdId: household.id,
+                              actorUserId: ref.read(currentUserIdProvider),
+                            );
+                        ref.read(ledgerRevisionProvider.notifier).state++;
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppColors.primaryGreen,
+                              content: Text(
+                                ref.tr(
+                                  '${household.name} has been reset to 0. Ready for your real data!',
+                                  '${household.name} imewekwa upya kuwa 0. Tayari kwa data zako halisi!',
+                                ),
                               ),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       }
-                    }
-                  },
-                ),
-              ],
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
 
           SectionHeader(
+            fontSize: 14.5,
             title: 'Monthly Category Budgets (${budgets.length})',
             actionLabel: '+ Set Budget',
             onActionTap: _showSetBudgetDialog,
           ),
           Card(
-            child: Column(
-              children: [
-                ...budgets.map(
-                  (b) => ListTile(
-                    title: Text(
-                      b.budget.categoryName,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      'Spent: ${AppFormatters.formatCurrency(b.amountSpent, symbol: household?.currencySymbol ?? 'TSh')} (${b.percentageUsed.toStringAsFixed(0)}%)',
-                    ),
-                    trailing: Text(
-                      AppFormatters.formatCurrency(
-                        b.budget.budgetAmount,
-                        symbol: household?.currencySymbol ?? 'TSh',
+            child: ListTileTheme(
+              data: ListTileThemeData(
+                dense: true,
+                titleTextStyle: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: primaryText,
+                ),
+                subtitleTextStyle: TextStyle(
+                  fontSize: 11.5,
+                  color: secondaryText,
+                ),
+              ),
+              child: Column(
+                children: [
+                  ...budgets.map(
+                    (b) => ListTile(
+                      title: Text(b.budget.categoryName),
+                      subtitle: Text(
+                        'Spent: ${AppFormatters.formatCurrency(b.amountSpent, symbol: household?.currencySymbol ?? 'TSh')} (${b.percentageUsed.toStringAsFixed(0)}%)',
                       ),
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      trailing: Text(
+                        AppFormatters.formatCurrency(
+                          b.budget.budgetAmount,
+                          symbol: household?.currencySymbol ?? 'TSh',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.add_chart_outlined,
-                    color: AppColors.primaryBlue,
+                  ListTile(
+                    leading: const Icon(
+                      Icons.add_chart_outlined,
+                      size: 20,
+                      color: AppColors.primaryBlue,
+                    ),
+                    title: const Text('Configure Monthly Category Budget'),
+                    onTap: _showSetBudgetDialog,
                   ),
-                  title: const Text('Configure Monthly Category Budget'),
-                  onTap: _showSetBudgetDialog,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
 
-          const SectionHeader(title: 'Notifications, Offline Sync & Security'),
+          const SectionHeader(
+            fontSize: 14.5,
+            title: 'Notifications, Offline Sync & Security',
+          ),
           Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  value: autoAlertSettings.isAutoEnabled,
-                  title: Text(
-                    ref.tr(
-                      'Automatic Low-Supply SMS / WhatsApp Alerts',
-                      'Tahadhari za Moja kwa Moja (SMS / WhatsApp)',
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Automatically send an alert to ${autoAlertSettings.preferredPhone} when a supply has <= 3 days left',
-                      'Tuma ujumbe moja kwa moja kwenda ${autoAlertSettings.preferredPhone} bidhaa ikibakiza siku <= 3',
-                    ),
-                  ),
-                  onChanged: (val) {
-                    ref
-                        .read(autoAlertSettingsProvider.notifier)
-                        .saveAlertPreferences(
-                          preferredPhone: autoAlertSettings.preferredPhone,
-                          isAutoEnabled: val,
-                        );
-                  },
+            child: ListTileTheme(
+              data: ListTileThemeData(
+                dense: true,
+                titleTextStyle: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: primaryText,
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.phone_callback_rounded,
-                    color: AppColors.primaryGreen,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Preferred Alert Phone Number',
-                      'Namba ya Kupokea Tahadhari',
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    '${autoAlertSettings.preferredPhone} • ${autoAlertSettings.preferredChannel == 'whatsapp' ? 'WhatsApp' : 'Auto Direct SMS'}',
-                  ),
-                  trailing: const Icon(Icons.edit_outlined, size: 18),
-                  onTap: _showEditAlertPhoneDialog,
+                subtitleTextStyle: TextStyle(
+                  fontSize: 11.5,
+                  color: secondaryText,
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.send_to_mobile_rounded,
-                    color: AppColors.info,
-                  ),
-                  title: Text(
-                    ref.tr(
-                      'Send Automatic Alert Now (Test)',
-                      'Tuma Tahadhari ya Majaribio Sasa',
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    value: autoAlertSettings.isAutoEnabled,
+                    title: Text(
+                      ref.tr(
+                        'Automatic Pop-Up Supply Reminders',
+                        'Tahadhari za Programu za Moja kwa Moja',
+                      ),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: primaryText,
+                      ),
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    ref.tr(
-                      'Dispatch low-supply alert immediately to ${autoAlertSettings.preferredPhone}',
-                      'Tuma tahadhari sasa hivi kwenda ${autoAlertSettings.preferredPhone}',
+                    subtitle: Text(
+                      ref.tr(
+                        'Free background push notification pops up (with sound) when any supply has <= 3 days left — even if the app is closed',
+                        'Tahadhari itajitokeza juu ya simu kwa mlio bure bidhaa ikibakiza siku <= 3 — hata programu ikiwa imefungwa',
+                      ),
+                      style: TextStyle(fontSize: 11.5, color: secondaryText),
                     ),
+                    onChanged: (val) {
+                      ref
+                          .read(autoAlertSettingsProvider.notifier)
+                          .saveAlertPreferences(
+                            isAutoEnabled: val,
+                          );
+                    },
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    if (household == null) return;
-                    final wallet = ref.read(activeHouseholdWalletProvider);
-                    final predictions =
-                        ref.read(activeHouseholdPredictionsProvider);
-                    await ShareLauncher.checkAndAutoSendLowSupplyAlerts(
-                      householdId: household.id,
-                      householdName: household.name,
-                      currencySymbol: household.currencySymbol,
-                      availableBalance: wallet?.availableBalance ?? 0,
-                      predictions: predictions,
-                      forceSendNow: true,
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: AppColors.primaryGreen,
-                          content: Text(
-                            ref.tr(
-                              'Automatic alert dispatched to ${autoAlertSettings.preferredPhone}!',
-                              'Tahadhari imetumwa kwenda ${autoAlertSettings.preferredPhone}!',
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.access_time_rounded,
+                      size: 20,
+                      color: AppColors.primaryGreen,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Daily Reminder Time',
+                        'Muda wa Tahadhari wa Kila Siku',
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        '${autoAlertSettings.formattedTime} (Tap to change)',
+                        'Saa ${autoAlertSettings.formattedTime} (Gusa kubadilisha)',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.edit_outlined, size: 16),
+                    onTap: _showDailyReminderTimePicker,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.alarm_on_rounded,
+                      size: 20,
+                      color: AppColors.info,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Test Pop-Up Reminder (5 Seconds)',
+                        'Jaribu Tahadhari ya Simu (Sekunde 5)',
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        'Schedules a heads-up pop-up alert in 5 seconds. Minimize/close app to watch it pop up!',
+                        'Inaratibu tahadhari itakayojitokeza baada ya sekunde 5. Funga programu ili uione ikitokea!',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () async {
+                      await ShareLauncher.scheduleBackgroundPopupReminder(
+                        title:
+                            '🏠 NyumbaSmart • ${household?.name ?? 'Household'}',
+                        message: ref.tr(
+                          '⚠️ Reminder: LUKU Electricity & Gas are running low. Tap to review shared supplies!',
+                          '⚠️ Tahadhari: Umeme wa LUKU na Gesi vinakaribia kuisha. Gusa kuangalia mahitaji!',
+                        ),
+                        delay: const Duration(seconds: 5),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: AppColors.primaryGreen,
+                            duration: const Duration(seconds: 5),
+                            content: Text(
+                              ref.tr(
+                                '⏰ Pop-up reminder scheduled in 5 seconds! Close or minimize the app now to see it pop down like a message!',
+                                '⏰ Tahadhari itatokea baada ya sekunde 5! Funga au weka programu pembeni sasa uione ikijitokeza juu ya kioo!',
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }
-                  },
-                ),
-                const Divider(),
-                SwitchListTile(
-                  value: !syncState.isOnline,
-                  title: const Text('Simulate Offline Network Interruption'),
-                  subtitle: const Text(
-                    'Test offline resilience and ledger sync status banner',
-                  ),
-                  onChanged: (offline) {
-                    ref
-                        .read(syncStatusProvider.notifier)
-                        .setOfflineMode(offline);
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.history_edu_outlined,
-                    color: AppColors.primaryBlue,
-                  ),
-                  title: const Text('View Immutable Financial Audit Trail'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/wallet/audit-logs'),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.lock_reset_outlined,
-                    color: AppColors.textDark,
-                  ),
-                  title: const Text('Change Administrator Password'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/reset-password'),
-                ),
-                const Divider(),
-                ListTile(
-                  key: const Key('settings_logout_tile'),
-                  leading: const Icon(
-                    Icons.logout_rounded,
-                    color: AppColors.expenseRed,
-                  ),
-                  title: const Text(
-                    'Log Out',
-                    style: TextStyle(
-                      color: AppColors.expenseRed,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  onTap: () async {
-                    final confirmed = await showDestructiveConfirmationDialog(
-                      context: context,
-                      title: 'Log Out?',
-                      message:
-                          'Are you sure you want to log out of your administrator account?',
-                      confirmLabel: 'Log Out',
-                    );
-                    if (confirmed && context.mounted) {
-                      await ref.read(authControllerProvider.notifier).logout();
-                      if (context.mounted) {
-                        context.go('/login');
+                        );
                       }
-                    }
-                  },
-                ),
-              ],
+                    },
+                  ),
+                  const Divider(),
+                  SwitchListTile(
+                    value: !syncState.isOnline,
+                    title: Text(
+                      'Simulate Offline Network Interruption',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: primaryText,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Test offline resilience and ledger sync status banner',
+                      style: TextStyle(fontSize: 11.5, color: secondaryText),
+                    ),
+                    onChanged: (offline) {
+                      ref
+                          .read(syncStatusProvider.notifier)
+                          .setOfflineMode(offline);
+                    },
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.history_edu_outlined,
+                      size: 20,
+                      color: AppColors.primaryBlue,
+                    ),
+                    title: const Text('View Immutable Financial Audit Trail'),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/wallet/audit-logs'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: Icon(
+                      Icons.lock_reset_outlined,
+                      size: 20,
+                      color: primaryText,
+                    ),
+                    title: const Text('Change Administrator Password'),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/reset-password'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    key: const Key('settings_logout_tile'),
+                    leading: const Icon(
+                      Icons.logout_rounded,
+                      size: 20,
+                      color: AppColors.expenseRed,
+                    ),
+                    title: const Text(
+                      'Log Out',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: AppColors.expenseRed,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: () async {
+                      final confirmed =
+                          await showDestructiveConfirmationDialog(
+                        context: context,
+                        title: 'Log Out?',
+                        message:
+                            'Are you sure you want to log out of your administrator account?',
+                        confirmLabel: 'Log Out',
+                      );
+                      if (confirmed && context.mounted) {
+                        await ref.read(authControllerProvider.notifier).logout();
+                        if (context.mounted) {
+                          context.go('/login');
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ],

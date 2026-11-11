@@ -25,13 +25,14 @@ class AppSurfaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final defaultBg = isDark ? AppColors.darkSurface : AppColors.surface;
-    final defaultBorder = isDark ? AppColors.darkBorder : AppColors.border;
+    final defaultBorder =
+        isDark ? AppColors.darkSoftGreenBorder : AppColors.softGreenBorder;
 
     final container = Container(
       decoration: BoxDecoration(
         color: backgroundColor ?? defaultBg,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: borderColor ?? defaultBorder, width: 1),
+        border: Border.all(color: borderColor ?? defaultBorder, width: 1.4),
         boxShadow: [
           BoxShadow(
             color: isDark
@@ -66,12 +67,14 @@ class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
   final VoidCallback? onActionTap;
+  final double fontSize;
 
   const SectionHeader({
     super.key,
     required this.title,
     this.actionLabel,
     this.onActionTap,
+    this.fontSize = 17,
   });
 
   @override
@@ -91,7 +94,7 @@ class SectionHeader extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: 17,
+                fontSize: fontSize,
                 fontWeight: FontWeight.w800,
                 color: textPrimary,
                 letterSpacing: -0.2,

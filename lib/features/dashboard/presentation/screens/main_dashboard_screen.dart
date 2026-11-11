@@ -55,60 +55,69 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
       _triggerAutoAlertsForActiveHousehold();
     });
     final currentTabIndex = ref.watch(dashboardTabIndexProvider);
+    void goHome() => ref.read(dashboardTabIndexProvider.notifier).state = 0;
 
-    final pages = const [
-      _DashboardHomeTab(),
-      TransactionHistoryScreen(),
-      ConsumptionOverviewScreen(),
-      ManageHouseholdMembersScreen(embeddedInTab: true),
-      SettingsScreen(),
+    final pages = [
+      const _DashboardHomeTab(),
+      TransactionHistoryScreen(onBack: goHome),
+      ConsumptionOverviewScreen(onBack: goHome),
+      ManageHouseholdMembersScreen(embeddedInTab: true, onBack: goHome),
+      SettingsScreen(onBack: goHome),
     ];
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: pages[currentTabIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.surface,
-          border: Border(
-            top: BorderSide(
-              color: isDark ? AppColors.darkBorder : AppColors.border,
-              width: 1,
+    return PopScope(
+      canPop: currentTabIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && currentTabIndex != 0) {
+          goHome();
+        }
+      },
+      child: Scaffold(
+        body: pages[currentTabIndex],
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : AppColors.surface,
+            border: Border(
+              top: BorderSide(
+                color: isDark ? AppColors.darkBorder : AppColors.border,
+                width: 1,
+              ),
             ),
           ),
-        ),
-        child: NavigationBar(
-          selectedIndex: currentTabIndex,
-          onDestinationSelected: (idx) =>
-              ref.read(dashboardTabIndexProvider.notifier).state = idx,
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: const Icon(Icons.home_rounded),
-              label: ref.tr('Home', 'Nyumbani'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.receipt_long_outlined),
-              selectedIcon: const Icon(Icons.receipt_long_rounded),
-              label: ref.tr('Activity', 'Miamala'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.insights_outlined),
-              selectedIcon: const Icon(Icons.insights_rounded),
-              label: ref.tr('Insights', 'Utabiri'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.people_outline_rounded),
-              selectedIcon: const Icon(Icons.people_rounded),
-              label: ref.tr('Members', 'Wanafamilia'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.grid_view_outlined),
-              selectedIcon: const Icon(Icons.grid_view_rounded),
-              label: ref.tr('More', 'Zaidi'),
-            ),
-          ],
+          child: NavigationBar(
+            selectedIndex: currentTabIndex,
+            onDestinationSelected: (idx) =>
+                ref.read(dashboardTabIndexProvider.notifier).state = idx,
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(Icons.home_outlined),
+                selectedIcon: const Icon(Icons.home_rounded),
+                label: ref.tr('Home', 'Nyumbani'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.receipt_long_outlined),
+                selectedIcon: const Icon(Icons.receipt_long_rounded),
+                label: ref.tr('Activity', 'Miamala'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.insights_outlined),
+                selectedIcon: const Icon(Icons.insights_rounded),
+                label: ref.tr('Insights', 'Utabiri'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.people_outline_rounded),
+                selectedIcon: const Icon(Icons.people_rounded),
+                label: ref.tr('Members', 'Wanafamilia'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view_rounded),
+                label: ref.tr('More', 'Zaidi'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -170,7 +179,8 @@ class _DashboardHomeTab extends ConsumerWidget {
     final secondaryText =
         isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
     final cardSurface = isDark ? AppColors.darkSurface : AppColors.surface;
-    final cardBorder = isDark ? AppColors.darkBorder : AppColors.border;
+    final cardBorder =
+        isDark ? AppColors.darkSoftGreenBorder : AppColors.softGreenBorder;
 
     return Scaffold(
       backgroundColor: Colors.transparent,

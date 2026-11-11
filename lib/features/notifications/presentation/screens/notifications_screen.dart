@@ -112,9 +112,14 @@ class NotificationsScreen extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final n = notifications[index];
                 final color = _severityColor(n.severity);
+                final isDark = Theme.of(context).brightness == Brightness.dark;
 
                 return AppSurfaceCard(
-                  borderColor: n.isRead ? AppColors.border : color,
+                  borderColor: n.isRead
+                      ? (isDark
+                          ? AppColors.darkSoftGreenBorder
+                          : AppColors.softGreenBorder)
+                      : color,
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

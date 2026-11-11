@@ -319,9 +319,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController(text: '+255 ');
+  final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  String _selectedAlertChannel = 'sms';
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -347,11 +346,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             password: _passwordCtrl.text,
             phoneNumber: _phoneCtrl.text,
           );
-      // Save preferred alert phone number & channel for automatic background SMS / WhatsApp alerts
+      // Enable automatic in-app background pop-up reminders
       await ref.read(autoAlertSettingsProvider.notifier).saveAlertPreferences(
-            preferredPhone: _phoneCtrl.text.trim(),
             isAutoEnabled: true,
-            preferredChannel: _selectedAlertChannel,
           );
       await ShareLauncher.requestAlertPermissions();
 
@@ -448,86 +445,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               cursorColor: Colors.white,
               decoration: nyumbaPillAuthInputDecoration(
-                hintText: 'Preferred Alert Phone (+255 7XX XXX XXX)',
+                hintText: 'Phone Number (Optional - e.g. +255 7XX...)',
               ),
-              validator: (val) {
-                final digits = (val ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-                return digits.length < 9
-                    ? 'Enter the phone number to receive automatic alerts'
-                    : null;
-              },
-            ),
-            const SizedBox(height: 8),
-            // Preferred Automatic Alert Channel Selector (Auto SMS vs WhatsApp)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Auto-Alert via: ',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => setState(() => _selectedAlertChannel = 'sms'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _selectedAlertChannel == 'sms'
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white),
-                    ),
-                    child: Text(
-                      '📲 Auto SMS',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: _selectedAlertChannel == 'sms'
-                            ? AppColors.primaryGreen
-                            : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () =>
-                      setState(() => _selectedAlertChannel = 'whatsapp'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _selectedAlertChannel == 'whatsapp'
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white),
-                    ),
-                    child: Text(
-                      '💬 WhatsApp',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: _selectedAlertChannel == 'whatsapp'
-                            ? AppColors.primaryGreen
-                            : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
             const SizedBox(height: 10),
             TextFormField(

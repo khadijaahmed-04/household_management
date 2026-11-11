@@ -12,7 +12,9 @@ import '../../domain/entities/consumption_entities.dart';
 
 /// 1. CONSUMPTION & PREDICTION OVERVIEW SCREEN (Sections 8 & 9)
 class ConsumptionOverviewScreen extends ConsumerStatefulWidget {
-  const ConsumptionOverviewScreen({super.key});
+  final VoidCallback? onBack;
+
+  const ConsumptionOverviewScreen({super.key, this.onBack});
 
   @override
   ConsumerState<ConsumptionOverviewScreen> createState() =>
@@ -49,6 +51,13 @@ class _ConsumptionOverviewScreenState
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: widget.onBack,
+              )
+            : null,
         title: Text(
           '${ref.tr('Insights & Supplies', 'Utabiri na Mahitaji')} • ${household.name}',
         ),

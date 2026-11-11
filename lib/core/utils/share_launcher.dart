@@ -307,7 +307,10 @@ class ShareLauncher {
                     : AppColors.background,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.border,
+                  color: isDark
+                      ? AppColors.darkSoftGreenBorder
+                      : AppColors.softGreenBorder,
+                  width: 1.2,
                 ),
               ),
               child: Text(

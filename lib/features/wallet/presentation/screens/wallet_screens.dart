@@ -782,7 +782,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
 /// 3. UNIFIED WALLET & TRANSACTION HISTORY SCREEN (Section 6.4)
 class TransactionHistoryScreen extends ConsumerWidget {
-  const TransactionHistoryScreen({super.key});
+  final VoidCallback? onBack;
+
+  const TransactionHistoryScreen({super.key, this.onBack});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -800,6 +802,13 @@ class TransactionHistoryScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        leading: onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: onBack,
+              )
+            : null,
         title: Text(
           '${ref.tr('Activity & Ledger', 'Miamala na Leja')} • ${household.name}',
         ),
