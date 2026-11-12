@@ -1,5 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
 
 enum SyncStatus {
@@ -91,15 +91,11 @@ final syncStatusProvider =
   return SyncStatusNotifier();
 });
 
-final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
-  final config = ref.watch(appConfigProvider);
-  if (!config.hasLiveSupabaseCredentials) {
-    return null;
-  }
+final firebaseReadyProvider = Provider<bool>((ref) {
   try {
-    return Supabase.instance.client;
+    return Firebase.apps.isNotEmpty;
   } catch (_) {
-    return null;
+    return false;
   }
 });
 

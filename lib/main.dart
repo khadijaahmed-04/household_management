@@ -1,9 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/nyumba_wave_background.dart';
@@ -16,16 +16,13 @@ Future<void> main() async {
     // AppConfig falls back to safe local defaults when .env is not present.
   }
 
-  final config = AppConfig.fromEnv();
-  if (config.hasLiveSupabaseCredentials) {
-    try {
-      await Supabase.initialize(
-        url: config.supabaseUrl,
-        anonKey: config.supabaseAnonKey,
-      );
-    } catch (_) {
-      // Continues in offline-resilient hybrid mode if initialization fails.
-    }
+  try {
+    await Firebase.initializeApp();
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (_) {
+    // Continues safely if native Firebase initialization is unavailable (e.g. tests).
   }
 
   runApp(const ProviderScope(child: NyumbaSmartApp()));

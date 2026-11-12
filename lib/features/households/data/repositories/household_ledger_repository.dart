@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/errors/app_exceptions.dart';
 import '../../../budgets/domain/entities/budget_entity.dart';
@@ -13,12 +13,14 @@ import '../../../predictions/domain/services/prediction_engine.dart';
 import '../../../wallet/domain/entities/wallet_entities.dart';
 import '../../domain/entities/household.dart';
 import '../../domain/entities/household_member.dart';
+import '../services/firestore_ledger_sync.dart';
 
 class HouseholdLedgerRepository {
-  final SupabaseClient? _supabase;
+  final FirestoreLedgerSyncService _firestoreSync;
   final PredictionEngine _predictionEngine;
   final NotificationAlertEvaluator _alertEvaluator;
   final _uuid = const Uuid();
+  String? _activeUserId;
 
   // Isolated per-household stores
   final Map<String, Household> _households = {};
@@ -37,15 +39,18 @@ class HouseholdLedgerRepository {
   final Map<String, List<AuditLogEntry>> _auditLogsByHousehold = {};
   final Set<String> _processedIdempotencyKeys = {};
   bool _isSeeding = false;
-  static const String _localStorageKey = 'nyumbasmart_ledger_snapshot_v1';
+  static const String _localStoragePrefix = 'nyumbasmart_ledger_snapshot_v2_';
+
+  String get _localStorageKey =>
+      '$_localStoragePrefix${_activeUserId ?? 'local'}';
 
   HouseholdLedgerRepository({
-    SupabaseClient? supabase,
+    FirestoreLedgerSyncService? firestoreSync,
     PredictionEngine predictionEngine = const PredictionEngine(),
     NotificationAlertEvaluator alertEvaluator =
         const NotificationAlertEvaluator(),
-    bool initializeDemoSeed = true,
-  })  : _supabase = supabase,
+    bool initializeDemoSeed = false,
+  })  : _firestoreSync = firestoreSync ?? const FirestoreLedgerSyncService(),
         _predictionEngine = predictionEngine,
         _alertEvaluator = alertEvaluator {
     if (initializeDemoSeed) {
@@ -53,6 +58,81 @@ class HouseholdLedgerRepository {
       _seedInitialTanzanianHouseholds();
       _isSeeding = false;
     }
+  }
+
+  Future<void> _syncRemote(Future<void> Function() op) async {
+    try {
+      await op().timeout(const Duration(seconds: 4));
+    } on TimeoutException {
+      // Firestore offline persistence keeps queued writes locally until online.
+    } catch (_) {
+      // Offline or transient errors continue with local persistence.
+    }
+  }
+
+  /// Synchronizes the signed-in user's households and ledger data from Cloud Firestore
+  /// (falling back to the user's scoped on-device cache when offline).
+  Future<void> syncForUser(String userId) async {
+    if (userId.isEmpty) return;
+    if (_activeUserId != userId) {
+      _clearMaps();
+      _activeUserId = userId;
+      await restoreFromLocalStorage(userId: userId);
+    }
+
+    if (!_firestoreSync.isAvailable) return;
+    try {
+      final bundle = await _firestoreSync
+          .fetchAllForUser(userId)
+          .timeout(const Duration(seconds: 8));
+      if (bundle == null) return;
+
+      _clearMaps();
+      _households.addAll(bundle.households);
+      _walletsByHousehold.addAll(bundle.wallets);
+      _membersByHousehold.addAll(bundle.members);
+      _categoriesByHousehold.addAll(bundle.categories);
+      _contributionsByHousehold.addAll(bundle.contributions);
+      _expensesByHousehold.addAll(bundle.expenses);
+      _transactionsByHousehold.addAll(bundle.transactions);
+      _budgetsByHousehold.addAll(bundle.budgets);
+      _suppliesByHousehold.addAll(bundle.supplies);
+      _consumptionByHousehold.addAll(bundle.consumption);
+      _predictionsByHousehold.addAll(bundle.predictions);
+      _billsByHousehold.addAll(bundle.bills);
+      _notificationsByHousehold.addAll(bundle.notifications);
+      _auditLogsByHousehold.addAll(bundle.auditLogs);
+
+      for (final hId in _households.keys) {
+        _refreshHouseholdAlerts(hId);
+      }
+      await _persistSnapshot();
+    } catch (_) {
+      // Keep local/cached state if offline or timed out.
+    }
+  }
+
+  void clearSessionData() {
+    _activeUserId = null;
+    _clearMaps();
+  }
+
+  void _clearMaps() {
+    _households.clear();
+    _membersByHousehold.clear();
+    _categoriesByHousehold.clear();
+    _walletsByHousehold.clear();
+    _contributionsByHousehold.clear();
+    _expensesByHousehold.clear();
+    _transactionsByHousehold.clear();
+    _budgetsByHousehold.clear();
+    _suppliesByHousehold.clear();
+    _consumptionByHousehold.clear();
+    _predictionsByHousehold.clear();
+    _billsByHousehold.clear();
+    _notificationsByHousehold.clear();
+    _auditLogsByHousehold.clear();
+    _processedIdempotencyKeys.clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -142,23 +222,8 @@ class HouseholdLedgerRepository {
       );
     }
 
-    String householdId = _uuid.v4();
-    if (_supabase != null) {
-      final rpcRes = await _supabase.rpc(
-        'create_household_with_defaults',
-        params: {
-          'p_name': name.trim(),
-          'p_description': description,
-          'p_address': address,
-          'p_currency_code': currencyCode,
-          'p_currency_symbol': currencySymbol,
-          'p_admin_display_name': adminDisplayName,
-        },
-      );
-      if (rpcRes is String && rpcRes.isNotEmpty) {
-        householdId = rpcRes;
-      }
-    }
+    _activeUserId ??= ownerId;
+    final householdId = _uuid.v4();
 
     final household = Household(
       id: householdId,
@@ -172,8 +237,7 @@ class HouseholdLedgerRepository {
       createdAt: DateTime.now(),
     );
 
-    _households[householdId] = household;
-    _walletsByHousehold[householdId] = HouseholdWallet(
+    final wallet = HouseholdWallet(
       id: 'wallet-$householdId',
       householdId: householdId,
       totalContributions: 0.0,
@@ -181,7 +245,7 @@ class HouseholdLedgerRepository {
       totalAdjustments: 0.0,
       availableBalance: 0.0,
     );
-    _membersByHousehold[householdId] = [
+    final members = [
       HouseholdMember(
         id: 'member-admin-$householdId',
         householdId: householdId,
@@ -192,9 +256,18 @@ class HouseholdLedgerRepository {
         joinedAt: DateTime.now(),
       ),
     ];
-    _categoriesByHousehold[householdId] =
+    final categories =
         ExpenseCategory.createDefaultCategoriesForHousehold(householdId);
     final supplies = TrackedSupply.createDefaultsForHousehold(householdId);
+    final predictions = <String, SupplyPrediction>{
+      for (final s in supplies)
+        s.id: _predictionEngine.computePrediction(supply: s, records: const []),
+    };
+
+    _households[householdId] = household;
+    _walletsByHousehold[householdId] = wallet;
+    _membersByHousehold[householdId] = members;
+    _categoriesByHousehold[householdId] = categories;
     _suppliesByHousehold[householdId] = supplies;
     _contributionsByHousehold[householdId] = [];
     _expensesByHousehold[householdId] = [];
@@ -204,11 +277,18 @@ class HouseholdLedgerRepository {
     _billsByHousehold[householdId] = [];
     _notificationsByHousehold[householdId] = [];
     _auditLogsByHousehold[householdId] = [];
-    _predictionsByHousehold[householdId] = {
-      for (final s in supplies)
-        s.id: _predictionEngine.computePrediction(supply: s, records: const []),
-    };
+    _predictionsByHousehold[householdId] = predictions;
 
+    await _syncRemote(
+      () => _firestoreSync.saveNewHousehold(
+        household: household,
+        wallet: wallet,
+        members: members,
+        categories: categories,
+        supplies: supplies,
+        predictions: predictions,
+      ),
+    );
     await _persistSnapshot();
     return household;
   }
@@ -239,6 +319,12 @@ class HouseholdLedgerRepository {
       lowBalanceThreshold: lowBalanceThreshold,
     );
     _households[householdId] = updated;
+    await _syncRemote(
+      () => _firestoreSync.updateHousehold(
+        updated,
+        _membersByHousehold[householdId] ?? const [],
+      ),
+    );
     await _persistSnapshot();
     return updated;
   }
@@ -250,11 +336,7 @@ class HouseholdLedgerRepository {
     required String actorUserId,
   }) async {
     verifyAdminWriteAccess(householdId: householdId, actorUserId: actorUserId);
-    if (_supabase != null) {
-      try {
-        await _supabase.from('households').delete().eq('id', householdId);
-      } catch (_) {}
-    }
+    await _syncRemote(() => _firestoreSync.deleteHousehold(householdId));
     _households.remove(householdId);
     _walletsByHousehold.remove(householdId);
     _membersByHousehold.remove(householdId);
@@ -322,6 +404,7 @@ class HouseholdLedgerRepository {
       joinedAt: DateTime.now(),
     );
     _membersByHousehold[householdId] = [...existingMembers, member];
+    await _syncRemote(() => _firestoreSync.upsertMember(member, isCreate: true));
     _persistSnapshot();
     return member;
   }
@@ -348,20 +431,28 @@ class HouseholdLedgerRepository {
     _membersByHousehold[householdId] =
         existingMembers.where((m) => m.id != memberId).toList();
 
+    final auditEntry = AuditLogEntry(
+      id: _uuid.v4(),
+      householdId: householdId,
+      actorUserId: actorUserId,
+      entityType: 'member',
+      entityId: memberId,
+      action: 'delete',
+      reason: 'Removed household contributor "${target.displayName}"',
+      previousState: {'display_name': target.displayName},
+      createdAt: DateTime.now(),
+    );
     _auditLogsByHousehold[householdId] = [
       ...(_auditLogsByHousehold[householdId] ?? const []),
-      AuditLogEntry(
-        id: _uuid.v4(),
-        householdId: householdId,
-        actorUserId: actorUserId,
-        entityType: 'member',
-        entityId: memberId,
-        action: 'delete',
-        reason: 'Removed household contributor "${target.displayName}"',
-        previousState: {'display_name': target.displayName},
-        createdAt: DateTime.now(),
-      ),
+      auditEntry,
     ];
+    await _syncRemote(
+      () => _firestoreSync.deleteMember(
+        householdId,
+        memberId,
+        auditLog: auditEntry,
+      ),
+    );
     _persistSnapshot();
   }
 
@@ -471,6 +562,10 @@ class HouseholdLedgerRepository {
       isActive: true,
     );
     _categoriesByHousehold[householdId] = [...existing, category];
+    await _syncRemote(
+      () => _firestoreSync.upsertCategory(category, isCreate: true),
+    );
+    _persistSnapshot();
     return category;
   }
 
@@ -495,6 +590,10 @@ class HouseholdLedgerRepository {
     );
     list[idx] = updated;
     _categoriesByHousehold[householdId] = list;
+    await _syncRemote(
+      () => _firestoreSync.upsertCategory(updated, isCreate: false),
+    );
+    _persistSnapshot();
     return updated;
   }
 
@@ -616,21 +715,6 @@ class HouseholdLedgerRepository {
       );
     }
 
-    if (_supabase != null) {
-      await _supabase.rpc(
-        'record_household_contribution',
-        params: {
-          'p_household_id': householdId,
-          'p_member_id': memberId,
-          'p_amount': amount,
-          'p_contribution_date':
-              contributionDate.toIso8601String().split('T').first,
-          'p_description': description,
-          'p_idempotency_key': idemKey,
-        },
-      );
-    }
-
     _processedIdempotencyKeys.add(scopedKey);
 
     final wallet = _walletsByHousehold[householdId]!;
@@ -657,12 +741,13 @@ class HouseholdLedgerRepository {
       contribution,
     ];
 
-    _walletsByHousehold[householdId] = wallet.copyWith(
+    final updatedWallet = wallet.copyWith(
       totalContributions: newContributions,
       availableBalance: balanceAfter,
       version: wallet.version + 1,
       lastTransactionAt: DateTime.now(),
     );
+    _walletsByHousehold[householdId] = updatedWallet;
 
     final walletTx = WalletTransaction(
       id: _uuid.v4(),
@@ -710,6 +795,13 @@ class HouseholdLedgerRepository {
       ),
     ];
 
+    await _syncRemote(
+      () => _firestoreSync.saveContributionBundle(
+        contribution: contribution,
+        updatedWallet: updatedWallet,
+        transaction: walletTx,
+      ),
+    );
     _refreshHouseholdAlerts(householdId);
     _persistSnapshot();
     return contribution;
@@ -778,23 +870,6 @@ class HouseholdLedgerRepository {
       );
     }
 
-    if (_supabase != null) {
-      await _supabase.rpc(
-        'record_household_expense',
-        params: {
-          'p_household_id': householdId,
-          'p_category_id': categoryId,
-          'p_paid_by_member_id': paidByMemberId,
-          'p_title': title.trim(),
-          'p_amount': amount,
-          'p_expense_date': expenseDate.toIso8601String().split('T').first,
-          'p_notes': notes,
-          'p_receipt_url': receiptUrl,
-          'p_idempotency_key': idemKey,
-        },
-      );
-    }
-
     _processedIdempotencyKeys.add(scopedKey);
 
     final balanceBefore = wallet.availableBalance;
@@ -824,12 +899,13 @@ class HouseholdLedgerRepository {
       expense,
     ];
 
-    _walletsByHousehold[householdId] = wallet.copyWith(
+    final updatedWallet = wallet.copyWith(
       totalExpenses: newExpenses,
       availableBalance: balanceAfter,
       version: wallet.version + 1,
       lastTransactionAt: DateTime.now(),
     );
+    _walletsByHousehold[householdId] = updatedWallet;
 
     final walletTx = WalletTransaction(
       id: _uuid.v4(),
@@ -878,8 +954,9 @@ class HouseholdLedgerRepository {
       ),
     ];
 
+    (ConsumptionRecord?, SupplyPrediction?) tracked = (null, null);
     if (autoTrackSupply) {
-      _autoTrackSupplyFromExpense(
+      tracked = _autoTrackSupplyFromExpense(
         householdId: householdId,
         actorUserId: actorUserId,
         category: category,
@@ -887,19 +964,28 @@ class HouseholdLedgerRepository {
       );
     }
 
+    await _syncRemote(
+      () => _firestoreSync.saveExpenseBundle(
+        expense: expense,
+        updatedWallet: updatedWallet,
+        transaction: walletTx,
+        autoConsumption: tracked.$1,
+        updatedPrediction: tracked.$2,
+      ),
+    );
     _refreshHouseholdAlerts(householdId);
     _persistSnapshot();
     return expense;
   }
 
-  void _autoTrackSupplyFromExpense({
+  (ConsumptionRecord?, SupplyPrediction?) _autoTrackSupplyFromExpense({
     required String householdId,
     required String actorUserId,
     required ExpenseCategory category,
     required Expense expense,
   }) {
     final supplies = _suppliesByHousehold[householdId] ?? const [];
-    if (supplies.isEmpty) return;
+    if (supplies.isEmpty) return (null, null);
 
     final lowerTitle = expense.title.toLowerCase();
     TrackedSupply? matchedSupply;
@@ -960,8 +1046,10 @@ class HouseholdLedgerRepository {
         ...(_consumptionByHousehold[householdId] ?? const []),
         record,
       ];
-      _recomputePredictionForSupply(householdId, matchedSupply);
+      final pred = _recomputePredictionForSupply(householdId, matchedSupply);
+      return (record, pred);
     }
+    return (null, null);
   }
 
   /// Safely corrects or reverses an existing wallet transaction without overwriting
@@ -1018,19 +1106,6 @@ class HouseholdLedgerRepository {
       );
     }
 
-    if (_supabase != null) {
-      await _supabase.rpc(
-        'correct_or_reverse_transaction',
-        params: {
-          'p_household_id': householdId,
-          'p_wallet_transaction_id': walletTransactionId,
-          'p_new_amount': newAmount,
-          'p_new_description': newDescription,
-          'p_reason': reason,
-        },
-      );
-    }
-
     // Mark original contribution or expense status as corrected / reversed
     final targetStatus =
         newAmount == 0 ? RecordStatus.reversed : RecordStatus.corrected;
@@ -1064,12 +1139,13 @@ class HouseholdLedgerRepository {
       adjType = WalletTransactionType.adjustmentDebit;
     }
 
-    _walletsByHousehold[householdId] = wallet.copyWith(
+    final updatedWallet = wallet.copyWith(
       totalAdjustments: newAdjustments,
       availableBalance: balanceAfter,
       version: wallet.version + 1,
       lastTransactionAt: DateTime.now(),
     );
+    _walletsByHousehold[householdId] = updatedWallet;
 
     final adjTx = WalletTransaction(
       id: _uuid.v4(),
@@ -1099,34 +1175,44 @@ class HouseholdLedgerRepository {
       adjTx,
     ];
 
+    final auditLog = AuditLogEntry(
+      id: _uuid.v4(),
+      householdId: householdId,
+      actorUserId: actorUserId,
+      entityType: 'wallet_transaction',
+      entityId: origTx.id,
+      action: newAmount == 0 ? 'reverse' : 'correct',
+      reason: reason.trim(),
+      previousState: {
+        'original_amount': origTx.amount,
+        'original_signed_amount': origTx.signedAmount,
+        'original_description': origTx.description,
+        'balance_before_adjustment': balanceBefore,
+      },
+      newState: {
+        'adjustment_transaction_id': adjTx.id,
+        'corrected_amount': newAmount,
+        'delta_signed': deltaSigned,
+        'new_description': newDescription.trim(),
+        'balance_after_adjustment': balanceAfter,
+      },
+      createdAt: DateTime.now(),
+    );
     _auditLogsByHousehold[householdId] = [
       ...(_auditLogsByHousehold[householdId] ?? const []),
-      AuditLogEntry(
-        id: _uuid.v4(),
-        householdId: householdId,
-        actorUserId: actorUserId,
-        entityType: 'wallet_transaction',
-        entityId: origTx.id,
-        action: newAmount == 0 ? 'reverse' : 'correct',
-        reason: reason.trim(),
-        previousState: {
-          'original_amount': origTx.amount,
-          'original_signed_amount': origTx.signedAmount,
-          'original_description': origTx.description,
-          'balance_before_adjustment': balanceBefore,
-        },
-        newState: {
-          'adjustment_transaction_id': adjTx.id,
-          'corrected_amount': newAmount,
-          'delta_signed': deltaSigned,
-          'new_description': newDescription.trim(),
-          'balance_after_adjustment': balanceAfter,
-        },
-        createdAt: DateTime.now(),
-      ),
+      auditLog,
     ];
 
+    await _syncRemote(
+      () => _firestoreSync.saveCorrectionBundle(
+        householdId: householdId,
+        updatedWallet: updatedWallet,
+        adjustmentTransaction: adjTx,
+        auditLog: auditLog,
+      ),
+    );
     _refreshHouseholdAlerts(householdId);
+    _persistSnapshot();
     return adjTx;
   }
 
@@ -1168,7 +1254,11 @@ class HouseholdLedgerRepository {
       ...(_suppliesByHousehold[householdId] ?? const []),
       supply,
     ];
-    _recomputePredictionForSupply(householdId, supply);
+    final pred = _recomputePredictionForSupply(householdId, supply);
+    await _syncRemote(
+      () => _firestoreSync.saveTrackedSupplyBundle(supply, pred),
+    );
+    _persistSnapshot();
     return supply;
   }
 
@@ -1275,7 +1365,14 @@ class HouseholdLedgerRepository {
       record,
     ];
 
-    _recomputePredictionForSupply(householdId, supply);
+    final updatedPred = _recomputePredictionForSupply(householdId, supply);
+    await _syncRemote(
+      () => _firestoreSync.saveConsumptionBundle(
+        record: record,
+        updatedPrediction: updatedPred,
+        isCreateRecord: true,
+      ),
+    );
     _refreshHouseholdAlerts(householdId);
     _persistSnapshot();
     return record;
@@ -1320,40 +1417,50 @@ class HouseholdLedgerRepository {
     }
 
     final idx = records.indexWhere((r) => r.id == latestRecord.id);
-    records[idx] = latestRecord.copyWith(
+    final updatedRecord = latestRecord.copyWith(
       actualDepletionDate: actualDepletionDate,
     );
+    records[idx] = updatedRecord;
     _consumptionByHousehold[householdId] = records;
 
     final previousPred = _predictionsByHousehold[householdId]?[supplyId];
     final updatedPred = _recomputePredictionForSupply(householdId, supply);
 
+    final auditLog = AuditLogEntry(
+      id: _uuid.v4(),
+      householdId: householdId,
+      actorUserId: actorUserId,
+      entityType: 'prediction',
+      entityId: updatedPred.id,
+      action: 'manual_prediction_override',
+      reason: reason?.trim().isNotEmpty == true
+          ? reason!.trim()
+          : 'Recorded actual confirmed supply depletion date',
+      previousState: {
+        'previous_estimated_date':
+            previousPred?.estimatedNextReplenishmentDate?.toIso8601String(),
+      },
+      newState: {
+        'actual_depletion_date': actualDepletionDate.toIso8601String(),
+        'updated_average_interval_days': updatedPred.averageIntervalDays,
+        'updated_estimated_next_date':
+            updatedPred.estimatedNextReplenishmentDate?.toIso8601String(),
+      },
+      createdAt: DateTime.now(),
+    );
     _auditLogsByHousehold[householdId] = [
       ...(_auditLogsByHousehold[householdId] ?? const []),
-      AuditLogEntry(
-        id: _uuid.v4(),
-        householdId: householdId,
-        actorUserId: actorUserId,
-        entityType: 'prediction',
-        entityId: updatedPred.id,
-        action: 'manual_prediction_override',
-        reason: reason?.trim().isNotEmpty == true
-            ? reason!.trim()
-            : 'Recorded actual confirmed supply depletion date',
-        previousState: {
-          'previous_estimated_date':
-              previousPred?.estimatedNextReplenishmentDate?.toIso8601String(),
-        },
-        newState: {
-          'actual_depletion_date': actualDepletionDate.toIso8601String(),
-          'updated_average_interval_days': updatedPred.averageIntervalDays,
-          'updated_estimated_next_date':
-              updatedPred.estimatedNextReplenishmentDate?.toIso8601String(),
-        },
-        createdAt: DateTime.now(),
-      ),
+      auditLog,
     ];
 
+    await _syncRemote(
+      () => _firestoreSync.saveConsumptionBundle(
+        record: updatedRecord,
+        updatedPrediction: updatedPred,
+        isCreateRecord: false,
+        auditLog: auditLog,
+      ),
+    );
     _refreshHouseholdAlerts(householdId);
     _persistSnapshot();
     return updatedPred;
@@ -1423,7 +1530,9 @@ class HouseholdLedgerRepository {
       ...(_billsByHousehold[householdId] ?? const []),
       bill,
     ];
+    await _syncRemote(() => _firestoreSync.saveRecurringBill(bill));
     _refreshHouseholdAlerts(householdId);
+    _persistSnapshot();
     return bill;
   }
 
@@ -1513,7 +1622,11 @@ class HouseholdLedgerRepository {
       existing.add(saved);
     }
     _budgetsByHousehold[householdId] = existing;
+    await _syncRemote(
+      () => _firestoreSync.saveBudget(saved, isCreate: idx == -1),
+    );
     _refreshHouseholdAlerts(householdId);
+    _persistSnapshot();
     return saved;
   }
 
@@ -1545,8 +1658,10 @@ class HouseholdLedgerRepository {
     );
     final idx = list.indexWhere((n) => n.id == notificationId);
     if (idx != -1) {
-      list[idx] = list[idx].copyWith(isRead: true);
+      final updated = list[idx].copyWith(isRead: true);
+      list[idx] = updated;
       _notificationsByHousehold[householdId] = list;
+      unawaited(_syncRemote(() => _firestoreSync.updateNotificationState(updated)));
     }
   }
 
@@ -1561,8 +1676,10 @@ class HouseholdLedgerRepository {
     );
     final idx = list.indexWhere((n) => n.id == notificationId);
     if (idx != -1) {
-      list[idx] = list[idx].copyWith(isDismissed: true, isRead: true);
+      final updated = list[idx].copyWith(isDismissed: true, isRead: true);
+      list[idx] = updated;
       _notificationsByHousehold[householdId] = list;
+      unawaited(_syncRemote(() => _firestoreSync.updateNotificationState(updated)));
     }
   }
 
@@ -1644,7 +1761,7 @@ class HouseholdLedgerRepository {
     final wallet = _walletsByHousehold[householdId];
     if (household == null || wallet == null) return;
 
-    final now = DateTime(2026, 11, 9);
+    final now = DateTime.now();
     final predictions =
         (_predictionsByHousehold[householdId] ?? const {}).values.toList();
     final bills = _billsByHousehold[householdId] ?? const [];
@@ -1670,6 +1787,11 @@ class HouseholdLedgerRepository {
         ...newlyGenerated,
         ...existing,
       ];
+      unawaited(
+        _syncRemote(
+          () => _firestoreSync.saveNotifications(householdId, newlyGenerated),
+        ),
+      );
     }
   }
 
@@ -2492,7 +2614,10 @@ class HouseholdLedgerRepository {
 
   /// Restores persisted household wallets, members, transactions, and supply records
   /// from on-device SharedPreferences.
-  Future<bool> restoreFromLocalStorage() async {
+  Future<bool> restoreFromLocalStorage({String? userId}) async {
+    if (userId != null && userId.isNotEmpty) {
+      _activeUserId = userId;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_localStorageKey);

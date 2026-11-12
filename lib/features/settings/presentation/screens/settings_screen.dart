@@ -294,7 +294,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user?.fullName ?? 'Dida Mwakasege',
+                        user?.fullName ?? 'NyumbaSmart User',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -303,7 +303,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${user?.email ?? 'dida@rahisi.co.tz'} • ${ref.tr('Administrator', 'Msimamizi')}',
+                        '${user?.email ?? 'Not signed in'} • ${ref.tr('Administrator', 'Msimamizi')}',
                         style: TextStyle(
                           fontSize: 12,
                           color: secondaryText,

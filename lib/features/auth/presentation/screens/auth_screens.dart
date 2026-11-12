@@ -2,9 +2,89 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/errors/app_exceptions.dart';
 import '../../../../core/utils/share_launcher.dart';
 import '../../../../core/widgets/nyumba_wave_background.dart';
 import '../providers/auth_providers.dart';
+
+String _formatAuthError(Object e) {
+  if (e is AppException) return e.message;
+  return e.toString().replaceFirst('Exception: ', '');
+}
+
+class _GoogleSignInButton extends StatelessWidget {
+  final Key? buttonKey;
+  final String label;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  const _GoogleSignInButton({
+    this.buttonKey,
+    required this.label,
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        key: buttonKey,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          backgroundColor: Colors.white.withValues(alpha: 0.96),
+          foregroundColor: const Color(0xFF1F2937),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.85),
+            width: 1.2,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+        ),
+        onPressed: isLoading ? null : onPressed,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF3F4F6),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'G',
+                style: TextStyle(
+                  color: Color(0xFFDB4437),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                  height: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// 1. SPLASH SCREEN
 class SplashScreen extends ConsumerStatefulWidget {
@@ -18,10 +98,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
-      context.go('/login');
-    });
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    await ref.read(authControllerProvider.notifier).checkSession();
+    if (!mounted) return;
+    final user = ref.read(authControllerProvider).valueOrNull;
+    context.go(user != null ? '/dashboard' : '/login');
   }
 
   @override
@@ -132,10 +217,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isSubmitting = true;
       _errorMessage = null;
     });
-    final enteredUser = _emailCtrl.text.trim();
-    final enteredPass = _passwordCtrl.text;
-    final resolvedEmail = enteredUser.isEmpty ? 'dida@rahisi.co.tz' : enteredUser;
-    final resolvedPass = enteredPass.isEmpty ? 'Password123!' : enteredPass;
+    final resolvedEmail = _emailCtrl.text.trim();
+    final resolvedPass = _passwordCtrl.text;
     try {
       await ref.read(authControllerProvider.notifier).login(
             email: resolvedEmail,
@@ -146,7 +229,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = _formatAuthError(e);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).signInWithGoogle();
+      if (mounted) {
+        context.go('/dashboard');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = _formatAuthError(e);
       });
     } finally {
       if (mounted) {
@@ -200,10 +306,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               cursorColor: Colors.white,
               decoration: nyumbaPillAuthInputDecoration(
-                hintText: 'User',
+                hintText: 'Email Address',
               ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty || !val.contains('@')
+                      ? 'Enter a valid email address'
+                      : null,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             TextFormField(
               key: const Key('login_password_field'),
               controller: _passwordCtrl,
@@ -218,12 +328,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               decoration: nyumbaPillAuthInputDecoration(
                 hintText: 'Password',
               ),
+              validator: (val) =>
+                  val == null || val.isEmpty ? 'Enter your password' : null,
             ),
             const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   TextButton(
                     style: TextButton.styleFrom(
@@ -265,6 +379,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 14),
+            _GoogleSignInButton(
+              buttonKey: const Key('login_google_btn'),
+              label: 'Continue with Google',
+              isLoading: _isSubmitting,
+              onPressed: _signInWithGoogle,
             ),
           ],
         ),
@@ -357,7 +478,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = _formatAuthError(e);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).signInWithGoogle();
+      await ref.read(autoAlertSettingsProvider.notifier).saveAlertPreferences(
+            isAutoEnabled: true,
+          );
+      await ShareLauncher.requestAlertPermissions();
+
+      if (mounted) {
+        context.go('/dashboard');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = _formatAuthError(e);
       });
     } finally {
       if (mounted) {
@@ -409,7 +558,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               cursorColor: Colors.white,
               decoration: nyumbaPillAuthInputDecoration(
-                hintText: 'Full Name (e.g. Dida Mwakasege)',
+                hintText: 'Full Name (e.g. Amina Hassan)',
               ),
               validator: (val) => val == null || val.trim().length < 2
                   ? 'Enter your full name'
@@ -466,7 +615,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ? 'Password must be at least 8 characters'
                   : null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            _GoogleSignInButton(
+              buttonKey: const Key('register_google_btn'),
+              label: 'Sign up with Google',
+              isLoading: _isSubmitting,
+              onPressed: _signUpWithGoogle,
+            ),
+            const SizedBox(height: 6),
             Align(
               alignment: Alignment.center,
               child: TextButton(

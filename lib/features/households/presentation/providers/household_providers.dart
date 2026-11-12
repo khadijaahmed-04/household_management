@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/network/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../budgets/domain/entities/budget_entity.dart';
 import '../../../categories/domain/entities/expense_category.dart';
@@ -13,14 +12,7 @@ import '../../domain/entities/household_member.dart';
 
 final householdLedgerRepositoryProvider =
     Provider<HouseholdLedgerRepository>((ref) {
-  final supabase = ref.watch(supabaseClientProvider);
-  final repo = HouseholdLedgerRepository(supabase: supabase);
-  repo.restoreFromLocalStorage().then((restored) {
-    if (restored) {
-      ref.read(ledgerRevisionProvider.notifier).state++;
-    }
-  });
-  return repo;
+  return HouseholdLedgerRepository(initializeDemoSeed: false);
 });
 
 /// Incremented whenever a financial or consumption operation mutates repository state
@@ -29,7 +21,7 @@ final ledgerRevisionProvider = StateProvider<int>((ref) => 0);
 
 final currentUserIdProvider = Provider<String>((ref) {
   final authUser = ref.watch(authControllerProvider).valueOrNull;
-  return authUser?.id ?? 'user-admin-dida-001';
+  return authUser?.id ?? '';
 });
 
 final userHouseholdsProvider = Provider<List<Household>>((ref) {
@@ -213,8 +205,10 @@ final activeHouseholdRecurringBillsProvider =
   return repo.getRecurringBills(householdId: household.id, actorUserId: userId);
 });
 
-final selectedReportMonthProvider =
-    StateProvider<DateTime>((ref) => DateTime(2026, 11, 1));
+final selectedReportMonthProvider = StateProvider<DateTime>((ref) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, 1);
+});
 
 final activeHouseholdBudgetsProvider =
     Provider<List<CategoryBudgetStatus>>((ref) {

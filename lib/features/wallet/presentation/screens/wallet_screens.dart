@@ -22,7 +22,7 @@ class _AddContributionScreenState extends ConsumerState<AddContributionScreen> {
   final _memberNameCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  DateTime _selectedDate = DateTime(2026, 11, 9);
+  DateTime _selectedDate = DateTime.now();
   bool _isSaving = false;
   String? _errorMsg;
 
@@ -304,7 +304,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _memberNameCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String? _selectedCategoryId;
-  DateTime _selectedDate = DateTime(2026, 11, 9);
+  DateTime _selectedDate = DateTime.now();
   String? _attachedReceiptName;
   bool _isSaving = false;
   String? _errorMsg;

@@ -290,109 +290,116 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
       backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final minH = constraints.maxHeight < 640 ? 640.0 : constraints.maxHeight;
           return SingleChildScrollView(
             physics: const ClampingScrollPhysics(),
-            child: SizedBox(
-              height: minH,
-              width: constraints.maxWidth,
-              child: Stack(
-                children: [
-                  // 1. Pure white bottom dock area
-                  const Positioned.fill(
-                    child: ColoredBox(color: Colors.white),
-                  ),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+                minWidth: constraints.maxWidth,
+              ),
+              child: IntrinsicHeight(
+                child: Stack(
+                  children: [
+                    // 1. Pure white bottom dock area
+                    const Positioned.fill(
+                      child: ColoredBox(color: Colors.white),
+                    ),
 
-                  // 2. Layered Green Wave Canvas covering top down to half-way through
-                  //    the bottom "Log In" pill button (bottom: 58), with large 58px rounded bottom corners.
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 58,
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(58),
-                        bottomRight: Radius.circular(58),
-                      ),
-                      child: CustomPaint(
-                        painter: _RichGreenHeroWavesPainter(),
+                    // 2. Layered Green Wave Canvas covering top down to half-way through
+                    //    the bottom "Log In" pill button (bottom: 58), with large 58px rounded bottom corners.
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 58,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(58),
+                          bottomRight: Radius.circular(58),
+                        ),
+                        child: CustomPaint(
+                          painter: _RichGreenHeroWavesPainter(),
+                        ),
                       ),
                     ),
-                  ),
 
-                  // 3. Foreground content aligned to the exact proportions of the reference design
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 40),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (topLeading != null)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: topLeading!,
-                            )
-                          else
-                            const SizedBox(height: 36),
+                    // 3. Foreground content aligned cleanly and scrollable when needed
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 36),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (topLeading != null)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: topLeading!,
+                              )
+                            else
+                              const SizedBox(height: 24),
 
-                          // Top Smiling House Icon
-                          const Center(
-                            child: NyumbaSmartLogo(size: 66),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Stacked 2-line Title ("Nyumba\nSmart")
-                          Text(
-                            '$titleTop\n$titleBottom',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 42,
-                              height: 0.98,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
+                            // Top Smiling House Icon
+                            const Center(
+                              child: NyumbaSmartLogo(size: 62),
                             ),
-                          ),
-                          const SizedBox(height: 22),
+                            const SizedBox(height: 12),
 
-                          // 2-line Subtitle sitting inside the darker green wave pocket
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(
-                              subtitle,
+                            // Stacked 2-line Title ("Nyumba\nSmart")
+                            Text(
+                              '$titleTop\n$titleBottom',
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.80),
-                                fontSize: 13,
-                                height: 1.38,
-                                fontWeight: FontWeight.w400,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 40,
+                                height: 0.98,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 16),
 
-                          const Spacer(flex: 3),
-
-                          // Pill-shaped Inputs + "Create Account / Forgot password?" links
-                          formContent,
-
-                          const Spacer(flex: 2),
-
-                          // Large White Pill Button ("Log In") straddling the bottom curve
-                          Center(
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 66,
-                              child: bottomActionButton,
+                            // 2-line Subtitle sitting inside the darker green wave pocket
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                subtitle,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.80),
+                                  fontSize: 13,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 25),
-                        ],
+
+                            const SizedBox(height: 20),
+                            const Spacer(flex: 2),
+
+                            // Pill-shaped Inputs + Google Sign-In + links
+                            formContent,
+
+                            const SizedBox(height: 18),
+                            const Spacer(flex: 1),
+
+                            // Large White Pill Button ("Log In") straddling the bottom curve
+                            Center(
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: 62,
+                                child: bottomActionButton,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );

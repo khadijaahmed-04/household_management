@@ -480,6 +480,7 @@ class _CreateHouseholdScreenState extends ConsumerState<CreateHouseholdScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<SupportedCurrency>(
                 value: _selectedCurrency,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Primary Household Currency',
                   prefixIcon: Icon(Icons.payments_outlined),
@@ -488,7 +489,11 @@ class _CreateHouseholdScreenState extends ConsumerState<CreateHouseholdScreen> {
                     .map(
                       (c) => DropdownMenuItem(
                         value: c,
-                        child: Text('${c.name} (${c.symbol} - ${c.code})'),
+                        child: Text(
+                          '${c.name} (${c.symbol} - ${c.code})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(),

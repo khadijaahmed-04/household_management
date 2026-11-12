@@ -40,13 +40,14 @@ class ReportsScreen extends ConsumerWidget {
 
     void shareMonthlyReport() {
       final symbol = household.currencySymbol;
+      final now = DateTime.now();
       final dueSupplies = predictions
           .where((p) {
-            final days = p.daysUntilNextPurchase(DateTime(2026, 11, 9));
+            final days = p.daysUntilNextPurchase(now);
             return days != null && days <= 5;
           })
           .map((p) {
-            final days = p.daysUntilNextPurchase(DateTime(2026, 11, 9)) ?? 0;
+            final days = p.daysUntilNextPurchase(now) ?? 0;
             return '  • ${ref.trItem(p.supplyName)}: ${days <= 0 ? ref.tr('Need refill now', 'Imekwisha') : ref.tr('~$days days left', '~siku $days zimesalia')}';
           })
           .join('\n');

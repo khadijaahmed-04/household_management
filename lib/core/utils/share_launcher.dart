@@ -164,7 +164,7 @@ class ShareLauncher {
       final dispatched =
           (prefs.getStringList(_dispatchedAlertsKey) ?? <String>[]).toSet();
 
-      final referenceToday = DateTime(2026, 11, 9);
+      final referenceToday = DateTime.now();
       final urgent = <SupplyPrediction>[];
 
       for (final p in predictions) {

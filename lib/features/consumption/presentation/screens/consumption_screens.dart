@@ -192,7 +192,7 @@ class _SupplyPredictionList extends ConsumerWidget {
       );
     }
 
-    final referenceToday = DateTime(2026, 11, 9);
+    final referenceToday = DateTime.now();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryText =
         isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
@@ -459,7 +459,7 @@ class _RecurringBillsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final referenceToday = DateTime(2026, 11, 9);
+    final referenceToday = DateTime.now();
     return Column(
       children: [
         Padding(
@@ -1026,12 +1026,13 @@ class _PredictionDetailsAndOverrideScreenState
     final household = ref.read(activeHouseholdProvider);
     if (household == null) return;
 
-    final initialDate = pred.effectiveNextDate ?? DateTime(2026, 11, 23);
+    final initialDate =
+        pred.effectiveNextDate ?? DateTime.now().add(const Duration(days: 7));
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: pred.lastPurchaseDate?.add(const Duration(days: 1)) ??
-          DateTime(2026, 1, 1),
+          DateTime(2024, 1, 1),
       lastDate: DateTime(2030),
       helpText: 'Select Actual Date Supply Finished',
     );
@@ -1335,7 +1336,7 @@ class _AddRecurringBillScreenState
   final _providerCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   BillingFrequency _frequency = BillingFrequency.monthly;
-  DateTime _nextDueDate = DateTime(2026, 11, 25);
+  DateTime _nextDueDate = DateTime.now().add(const Duration(days: 14));
 
   @override
   void dispose() {

@@ -142,34 +142,36 @@ class _DashboardHomeTab extends ConsumerWidget {
 
     if (household == null || wallet == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.transparent,
         appBar: AppBar(title: const Text('NyumbaSmart')),
-        body: Padding(
-          padding: const EdgeInsets.all(20),
-          child: EmptyStateCard(
-            icon: Icons.home_work_outlined,
-            title: ref.tr(
-              'Create Your First Household',
-              'Unda Nyumba Yako ya Kwanza',
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: EmptyStateCard(
+              icon: Icons.home_work_outlined,
+              title: ref.tr(
+                'Create Your First Household',
+                'Unda Nyumba Yako ya Kwanza',
+              ),
+              subtitle: ref.tr(
+                'Start tracking shared contributions, expenses, and supply replenishment predictions.',
+                'Anza kufuatilia michango ya pamoja, matumizi na utabiri wa manunuzi ya nyumbani.',
+              ),
+              actionLabel: ref.tr('Create Household', 'Unda Nyumba'),
+              onAction: () => context.push('/households/create'),
             ),
-            subtitle: ref.tr(
-              'Start tracking shared contributions, expenses, and supply replenishment predictions.',
-              'Anza kufuatilia michango ya pamoja, matumizi na utabiri wa manunuzi ya nyumbani.',
-            ),
-            actionLabel: ref.tr('Create Household', 'Unda Nyumba'),
-            onAction: () => context.push('/households/create'),
           ),
         ),
       );
     }
 
     final firstName =
-        (user?.fullName ?? 'Dida').trim().split(' ').firstOrNull ?? 'Dida';
+        (user?.fullName ?? 'Member').trim().split(' ').firstOrNull ?? 'Member';
     final unreadCount = notifications.where((n) => !n.isRead).length;
 
     // Option 1: Only surface supplies that are running low (<= 3 days remaining)
     final urgentSupplies = predictions.where((p) {
-      final days = p.daysUntilNextPurchase(DateTime(2026, 11, 9));
+      final days = p.daysUntilNextPurchase(DateTime.now());
       return days != null && days <= 3;
     }).toList();
 
@@ -911,7 +913,7 @@ class _DashboardHomeTab extends ConsumerWidget {
                           onTap: () {
                             final lines = urgentSupplies.map((p) {
                               final d = p.daysUntilNextPurchase(
-                                    DateTime(2026, 11, 9),
+                                    DateTime.now(),
                                   ) ??
                                   0;
                               return '• *${ref.trItem(p.supplyName)}*: ${d <= 0 ? ref.tr('Needs refill now', 'Imekwisha') : ref.tr('~$d days left', '~siku $d zimesalia')}';

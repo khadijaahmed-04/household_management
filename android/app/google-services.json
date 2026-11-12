@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "674739876070",
+    "project_id": "nyumbasmart-tz-2026",
+    "storage_bucket": "nyumbasmart-tz-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:674739876070:android:b57dfd9bce437b5b784b27",
+        "android_client_info": {
+          "package_name": "rahisi.com.household_management"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "674739876070-ks1qjuio5e1m5f8a34vdcm3evknlmn7f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "rahisi.com.household_management",
+            "certificate_hash": "1a3dad14a930ea31311291f644e865e2c3a43f9d"
+          }
+        },
+        {
+          "client_id": "674739876070-9gafqbb8e6uu5n0192u4fs0hpis0jbqu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAY3m7m_Pxn8nIyAtDwIYIoGMD-Y8nbFCg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "674739876070-9gafqbb8e6uu5n0192u4fs0hpis0jbqu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
