@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/consumption/domain/entities/consumption_entities.dart';
 import '../../features/predictions/domain/entities/prediction_entity.dart';
 import '../constants/app_colors.dart';
 import 'formatters.dart';
@@ -141,15 +142,40 @@ class ShareLauncher {
     }
   }
 
-  /// Automatically checks if any household supply is within <= 3 days of running out,
-  /// pops up a WhatsApp-style heads-up notification, and schedules background OS alarms
-  /// for upcoming supply replenishments so alerts arrive even when the app is closed.
-  static Future<void> checkAndAutoSendLowSupplyAlerts({
+  static DateTime _computeNextDailyReminder({
+    required DateTime now,
+    required int hour,
+    required int minute,
+  }) {
+    var nextDailyTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    if (nextDailyTime.isBefore(now.add(const Duration(minutes: 1)))) {
+      nextDailyTime = nextDailyTime.add(const Duration(days: 1));
+    }
+    return nextDailyTime;
+  }
+
+  /// Comprehensive alert check for:
+  /// 1. Depleted / Zero Wallet Balance (Money finished: availableBalance <= 0)
+  /// 2. Low Wallet Balance (availableBalance <= lowBalanceThreshold)
+  /// 3. Upcoming / Due Scheduled Recurring Bills (Internet, Rent, etc.)
+  /// 4. Urgent Supply Replenishments (<= 3 days remaining)
+  ///
+  /// Pops up immediate heads-up notifications (like a WhatsApp banner) and
+  /// schedules background Android alarms so users are alerted even with the app closed.
+  static Future<void> checkAndAutoSendHouseholdAlerts({
     required String householdId,
     required String householdName,
     required String currencySymbol,
     required double availableBalance,
-    required List<SupplyPrediction> predictions,
+    double? lowBalanceThreshold,
+    List<SupplyPrediction> predictions = const [],
+    List<RecurringBill> recurringBills = const [],
     bool forceSendNow = false,
   }) async {
     try {
@@ -165,66 +191,176 @@ class ShareLauncher {
           (prefs.getStringList(_dispatchedAlertsKey) ?? <String>[]).toSet();
 
       final referenceToday = DateTime.now();
-      final urgent = <SupplyPrediction>[];
+      final dateKey =
+          '${referenceToday.year}-${referenceToday.month.toString().padLeft(2, '0')}-${referenceToday.day.toString().padLeft(2, '0')}';
 
+      // -----------------------------------------------------------------------
+      // 1. WALLET BALANCE ALERT (BELOW USER CONFIGURED THRESHOLD)
+      // -----------------------------------------------------------------------
+      final threshold = lowBalanceThreshold ?? 0.0;
+      final isBelowThreshold = availableBalance <= threshold;
+
+      if (!isBelowThreshold) {
+        // Balance has recovered above threshold: clear previous balance dedup keys
+        // so if the wallet drops low again later, the alert will fire properly.
+        dispatched.removeWhere((key) =>
+            key.startsWith('balance_low_$householdId') ||
+            key.startsWith('balance_zero_$householdId'));
+      } else {
+        final balanceKey = 'balance_low_${householdId}_$dateKey';
+
+        if (forceSendNow || !dispatched.contains(balanceKey)) {
+          dispatched.add(balanceKey);
+
+          final balanceTitle = '⚠️ Salio Liko Chini • $householdName';
+          final balanceMessage =
+              'Salio la pochi ya kaya limefika ${AppFormatters.formatCurrency(availableBalance, symbol: currencySymbol)}, ambalo liko chini ya kiwango chako cha tahadhari cha ${AppFormatters.formatCurrency(threshold, symbol: currencySymbol)}.\n'
+              'Household wallet balance is ${AppFormatters.formatCurrency(availableBalance, symbol: currencySymbol)}, below your alert threshold of ${AppFormatters.formatCurrency(threshold, symbol: currencySymbol)}.';
+
+          await showInstantPopupReminder(
+            title: balanceTitle,
+            message: balanceMessage,
+            reminderId: householdId.hashCode.abs() % 50000 + 302,
+          );
+
+          final nextDaily = _computeNextDailyReminder(
+            now: referenceToday,
+            hour: reminderHour,
+            minute: reminderMinute,
+          );
+          await scheduleBackgroundPopupReminder(
+            title: balanceTitle,
+            message: balanceMessage,
+            delay: nextDaily.difference(referenceToday),
+            reminderId: householdId.hashCode.abs() % 50000 + 352,
+          );
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // 2. SCHEDULED RECURRING BILLS DUE ALERT
+      // -----------------------------------------------------------------------
+      final urgentBills = <RecurringBill>[];
+      for (final bill in recurringBills) {
+        if (!bill.isActive) continue;
+        final daysUntil = bill.daysUntilDue(referenceToday);
+        if (daysUntil <= bill.remindDaysBefore) {
+          final dueKey =
+              'bill_${householdId}_${bill.id}_${bill.nextDueDate.toIso8601String().split('T').first}';
+          if (forceSendNow || !dispatched.contains(dueKey)) {
+            urgentBills.add(bill);
+            dispatched.add(dueKey);
+          }
+        }
+      }
+
+      if (urgentBills.isNotEmpty) {
+        final billLines = urgentBills.map((b) {
+          final days = b.daysUntilDue(referenceToday);
+          final dueStr = AppFormatters.formatDate(b.nextDueDate);
+          final timing = days <= 0
+              ? 'Inatakiwa kulipwa leo! (Due today)'
+              : 'Imebaki siku $days (due $dueStr)';
+          return '• ${b.title}: $timing (${AppFormatters.formatCurrency(b.expectedAmount, symbol: currencySymbol)})';
+        }).join('\n');
+
+        final billTitle = '📅 Malipo ya Bili Yakaribia • $householdName';
+        final billMessage =
+            'Kumbukumbu ya bili za kaya:\n$billLines\n💰 Salio la Pochi: ${AppFormatters.formatCurrency(availableBalance, symbol: currencySymbol)}';
+
+        await showInstantPopupReminder(
+          title: billTitle,
+          message: billMessage,
+          reminderId: householdId.hashCode.abs() % 50000 + 201,
+        );
+
+        final nextDaily = _computeNextDailyReminder(
+          now: referenceToday,
+          hour: reminderHour,
+          minute: reminderMinute,
+        );
+        await scheduleBackgroundPopupReminder(
+          title: billTitle,
+          message: billMessage,
+          delay: nextDaily.difference(referenceToday),
+          reminderId: householdId.hashCode.abs() % 50000 + 251,
+        );
+      }
+
+      // -----------------------------------------------------------------------
+      // 3. LOW SUPPLY REPLENISHMENT ALERT
+      // -----------------------------------------------------------------------
+      final urgentSupplies = <SupplyPrediction>[];
       for (final p in predictions) {
         final daysLeft = p.daysUntilNextPurchase(referenceToday);
         if (daysLeft != null && daysLeft <= 3) {
           final cycleKey =
               '${householdId}_${p.supplyId}_${p.effectiveNextDate?.toIso8601String() ?? 'due'}';
           if (forceSendNow || !dispatched.contains(cycleKey)) {
-            urgent.add(p);
+            urgentSupplies.add(p);
             dispatched.add(cycleKey);
           }
         }
       }
 
-      if (urgent.isEmpty) return;
+      if (urgentSupplies.isNotEmpty) {
+        final lines = urgentSupplies.map((p) {
+          final days = p.daysUntilNextPurchase(referenceToday) ?? 0;
+          final dateStr = p.effectiveNextDate != null
+              ? AppFormatters.formatDate(p.effectiveNextDate!)
+              : 'soon';
+          return '• ${p.supplyName}: ${days <= 0 ? 'Finished / Refill now' : '~$days days left (expected $dateStr)'}';
+        }).join('\n');
+
+        final supplyMessage = '⚠️ Supplies nearly finished:\n'
+            '$lines\n'
+            '💰 Shared Balance: ${AppFormatters.formatCurrency(availableBalance, symbol: currencySymbol)}';
+        final supplyTitle = '🏠 NyumbaSmart • $householdName';
+
+        await showInstantPopupReminder(
+          title: supplyTitle,
+          message: supplyMessage,
+          reminderId: householdId.hashCode.abs() % 50000 + 100,
+        );
+
+        final nextDaily = _computeNextDailyReminder(
+          now: referenceToday,
+          hour: reminderHour,
+          minute: reminderMinute,
+        );
+        await scheduleBackgroundPopupReminder(
+          title: supplyTitle,
+          message: supplyMessage,
+          delay: nextDaily.difference(referenceToday),
+          reminderId: householdId.hashCode.abs() % 50000 + 150,
+        );
+      }
 
       await prefs.setStringList(_dispatchedAlertsKey, dispatched.toList());
-
-      final lines = urgent.map((p) {
-        final days = p.daysUntilNextPurchase(referenceToday) ?? 0;
-        final dateStr = p.effectiveNextDate != null
-            ? AppFormatters.formatDate(p.effectiveNextDate!)
-            : 'soon';
-        return '• ${p.supplyName}: ${days <= 0 ? 'Finished / Refill now' : '~$days days left (expected $dateStr)'}';
-      }).join('\n');
-
-      final message = '⚠️ Supplies nearly finished:\n'
-          '$lines\n'
-          '💰 Shared Balance: ${AppFormatters.formatCurrency(availableBalance, symbol: currencySymbol)}';
-
-      final title = '🏠 NyumbaSmart • $householdName';
-
-      // 1. Pop up immediate heads-up notification banner (like a WhatsApp message)
-      await showInstantPopupReminder(
-        title: title,
-        message: message,
-        reminderId: householdId.hashCode.abs() % 50000 + 100,
-      );
-
-      // 2. Also schedule a background OS alarm for the user's configured daily reminder time
-      // so if they are outside the app, Android wakes up and pops up the reminder!
-      final now = DateTime.now();
-      var nextDailyTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        reminderHour,
-        reminderMinute,
-      );
-      if (nextDailyTime.isBefore(now.add(const Duration(minutes: 1)))) {
-        nextDailyTime = nextDailyTime.add(const Duration(days: 1));
-      }
-      await scheduleBackgroundPopupReminder(
-        title: title,
-        message: message,
-        delay: nextDailyTime.difference(now),
-        reminderId: householdId.hashCode.abs() % 50000 + 200,
-      );
     } catch (_) {}
   }
+
+  /// Backward-compatible alias forwarding to [checkAndAutoSendHouseholdAlerts].
+  static Future<void> checkAndAutoSendLowSupplyAlerts({
+    required String householdId,
+    required String householdName,
+    required String currencySymbol,
+    required double availableBalance,
+    required List<SupplyPrediction> predictions,
+    double? lowBalanceThreshold,
+    List<RecurringBill> recurringBills = const [],
+    bool forceSendNow = false,
+  }) =>
+      checkAndAutoSendHouseholdAlerts(
+        householdId: householdId,
+        householdName: householdName,
+        currencySymbol: currencySymbol,
+        availableBalance: availableBalance,
+        lowBalanceThreshold: lowBalanceThreshold,
+        predictions: predictions,
+        recurringBills: recurringBills,
+        forceSendNow: forceSendNow,
+      );
 
   /// Shows a bottom sheet where the user can set a free native pop-up reminder
   /// (including a 5-second background test so they can close the app and watch it pop up!)

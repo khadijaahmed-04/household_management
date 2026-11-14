@@ -167,6 +167,7 @@ class WelcomeScreen extends StatelessWidget {
       bottomActionButton: ElevatedButton(
         key: const Key('welcome_sign_in_btn'),
         style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryGreen,
           elevation: 2,
@@ -179,7 +180,7 @@ class WelcomeScreen extends StatelessWidget {
         child: const Text(
           'Log In',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: FontWeight.w700,
             color: AppColors.primaryGreen,
           ),
@@ -393,6 +394,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       bottomActionButton: ElevatedButton(
         key: const Key('login_submit_btn'),
         style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryGreen,
           elevation: 3,
@@ -418,8 +420,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             : const Text(
                 'Log In',
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.primaryGreen,
                 ),
               ),
@@ -643,6 +645,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       bottomActionButton: ElevatedButton(
         key: const Key('register_submit_btn'),
         style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryGreen,
           elevation: 2,
@@ -664,7 +667,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             : const Text(
                 'Create Account',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primaryGreen,
                 ),
@@ -759,6 +762,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       ),
       bottomActionButton: ElevatedButton(
         style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryGreen,
           side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
@@ -872,6 +876,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       ),
       bottomActionButton: ElevatedButton(
         style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryGreen,
           side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),

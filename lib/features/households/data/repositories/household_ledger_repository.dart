@@ -1772,26 +1772,36 @@ class HouseholdLedgerRepository {
     );
     final existing = _notificationsByHousehold[householdId] ?? const [];
 
+    // When balance recovers above threshold, dismiss previous low wallet balance alerts
+    List<HouseholdNotification> currentList = existing;
+    if (wallet.availableBalance > household.lowBalanceThreshold) {
+      currentList = existing
+          .where((n) => n.type != NotificationType.lowWalletBalance)
+          .toList();
+    }
+
     final newlyGenerated = _alertEvaluator.evaluateAlerts(
       household: household,
       wallet: wallet,
       predictions: predictions,
       recurringBills: bills,
       budgetStatuses: budgets,
-      existingNotifications: existing,
+      existingNotifications: currentList,
       referenceDate: now,
     );
 
-    if (newlyGenerated.isNotEmpty) {
+    if (newlyGenerated.isNotEmpty || currentList.length != existing.length) {
       _notificationsByHousehold[householdId] = [
         ...newlyGenerated,
-        ...existing,
+        ...currentList,
       ];
-      unawaited(
-        _syncRemote(
-          () => _firestoreSync.saveNotifications(householdId, newlyGenerated),
-        ),
-      );
+      if (newlyGenerated.isNotEmpty) {
+        unawaited(
+          _syncRemote(
+            () => _firestoreSync.saveNotifications(householdId, newlyGenerated),
+          ),
+        );
+      }
     }
   }
 

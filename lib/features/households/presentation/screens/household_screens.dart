@@ -401,7 +401,8 @@ class _CreateHouseholdScreenState extends ConsumerState<CreateHouseholdScreen> {
       final repo = ref.read(householdLedgerRepositoryProvider);
       final userId = ref.read(currentUserIdProvider);
       final userProfile = ref.read(authControllerProvider).valueOrNull;
-      final threshold = double.tryParse(_thresholdCtrl.text.trim()) ?? 25000.0;
+      final threshold =
+          AppFormatters.tryParseAmount(_thresholdCtrl.text) ?? 25000.0;
 
       final created = await repo.createHousehold(
         ownerId: userId,
@@ -576,7 +577,7 @@ class _EditHouseholdScreenState extends ConsumerState<EditHouseholdScreen> {
       description: _descCtrl.text,
       address: _addressCtrl.text,
       lowBalanceThreshold:
-          double.tryParse(_thresholdCtrl.text) ?? h.lowBalanceThreshold,
+          AppFormatters.tryParseAmount(_thresholdCtrl.text) ?? h.lowBalanceThreshold,
     );
     ref.read(ledgerRevisionProvider.notifier).state++;
     if (mounted) {

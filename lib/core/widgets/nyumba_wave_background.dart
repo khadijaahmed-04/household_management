@@ -307,12 +307,12 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
                     ),
 
                     // 2. Layered Green Wave Canvas covering top down to half-way through
-                    //    the bottom "Log In" pill button (bottom: 58), with large 58px rounded bottom corners.
+                    //    the bottom "Log In" pill button (bottom: 52), with large 58px rounded bottom corners.
                     Positioned(
                       top: 0,
                       left: 0,
                       right: 0,
-                      bottom: 58,
+                      bottom: 52,
                       child: ClipRRect(
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(58),
@@ -328,7 +328,7 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
                     SafeArea(
                       bottom: false,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -338,13 +338,13 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
                                 child: topLeading!,
                               )
                             else
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 16),
 
                             // Top Smiling House Icon
                             const Center(
-                              child: NyumbaSmartLogo(size: 62),
+                              child: NyumbaSmartLogo(size: 54),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
 
                             // Stacked 2-line Title ("Nyumba\nSmart")
                             Text(
@@ -352,13 +352,13 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 40,
+                                fontSize: 36,
                                 height: 0.98,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
 
                             // 2-line Subtitle sitting inside the darker green wave pocket
                             Padding(
@@ -368,32 +368,30 @@ class NyumbaAuthWaveLayout extends StatelessWidget {
                                 subtitle,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.80),
-                                  fontSize: 13,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 12.5,
                                   height: 1.35,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ),
 
-                            const SizedBox(height: 20),
-                            const Spacer(flex: 2),
+                            const SizedBox(height: 16),
 
                             // Pill-shaped Inputs + Google Sign-In + links
                             formContent,
 
-                            const SizedBox(height: 18),
-                            const Spacer(flex: 1),
+                            const SizedBox(height: 16),
 
-                            // Large White Pill Button ("Log In") straddling the bottom curve
+                            // Large White Pill Button ("Log In" / "Create Account")
                             Center(
                               child: SizedBox(
                                 width: double.infinity,
-                                height: 62,
+                                height: 64,
                                 child: bottomActionButton,
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                           ],
                         ),
                       ),
@@ -513,10 +511,10 @@ InputDecoration nyumbaPillAuthInputDecoration({
     prefixIcon: prefixIcon,
     filled: true,
     fillColor: Colors.white.withValues(alpha: 0.06),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
     hintStyle: TextStyle(
       color: Colors.white.withValues(alpha: 0.90),
-      fontSize: 17,
+      fontSize: 15,
       fontWeight: FontWeight.w500,
     ),
     errorStyle: const TextStyle(

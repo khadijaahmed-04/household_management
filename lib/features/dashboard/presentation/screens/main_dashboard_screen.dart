@@ -37,15 +37,34 @@ class _MainDashboardScreenState extends ConsumerState<MainDashboardScreen> {
 
   void _triggerAutoAlertsForActiveHousehold() {
     final household = ref.read(activeHouseholdProvider);
-    final wallet = ref.read(activeHouseholdWalletProvider);
-    final predictions = ref.read(activeHouseholdPredictionsProvider);
-    if (household == null || wallet == null) return;
-    ShareLauncher.checkAndAutoSendLowSupplyAlerts(
+    if (household == null) return;
+    final repo = ref.read(householdLedgerRepositoryProvider);
+    final userId = ref.read(currentUserIdProvider);
+
+    // Read directly from repository to ensure 100% fresh, up-to-date wallet balance & threshold
+    final wallet =
+        repo.getWallet(householdId: household.id, actorUserId: userId);
+    final freshHousehold = repo.getHouseholdById(
       householdId: household.id,
-      householdName: household.name,
-      currencySymbol: household.currencySymbol,
+      actorUserId: userId,
+    );
+    final predictions = repo.getPredictions(
+      householdId: household.id,
+      actorUserId: userId,
+    );
+    final bills = repo.getRecurringBills(
+      householdId: household.id,
+      actorUserId: userId,
+    );
+
+    ShareLauncher.checkAndAutoSendHouseholdAlerts(
+      householdId: freshHousehold.id,
+      householdName: freshHousehold.name,
+      currencySymbol: freshHousehold.currencySymbol,
       availableBalance: wallet.availableBalance,
+      lowBalanceThreshold: freshHousehold.lowBalanceThreshold,
       predictions: predictions,
+      recurringBills: bills,
     );
   }
 

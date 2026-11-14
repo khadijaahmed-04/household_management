@@ -649,6 +649,22 @@ class _RecordSupplyPurchaseScreenState
         paidByMemberId: resolvedMemberId,
       );
       ref.read(ledgerRevisionProvider.notifier).state++;
+      if (_deductFromWallet) {
+        final updatedWallet = repo.getWallet(
+          householdId: household.id,
+          actorUserId: userId,
+        );
+        if (updatedWallet.availableBalance <= household.lowBalanceThreshold) {
+          ShareLauncher.checkAndAutoSendHouseholdAlerts(
+            householdId: household.id,
+            householdName: household.name,
+            currencySymbol: household.currencySymbol,
+            availableBalance: updatedWallet.availableBalance,
+            lowBalanceThreshold: household.lowBalanceThreshold,
+            forceSendNow: true,
+          );
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

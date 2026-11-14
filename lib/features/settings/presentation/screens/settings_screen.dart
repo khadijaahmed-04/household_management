@@ -137,6 +137,132 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _showLowBalanceThresholdDialog() async {
+    final household = ref.read(activeHouseholdProvider);
+    if (household == null) return;
+
+    final thresholdCtrl = TextEditingController(
+      text: household.lowBalanceThreshold.toStringAsFixed(0),
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppColors.warning,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  ref.tr(
+                    'Low Balance Alert Threshold',
+                    'Kiwango cha Tahadhari ya Salio',
+                  ),
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ref.tr(
+                    'Set the minimum wallet balance that triggers low-balance warnings and pop-up notifications:',
+                    'Weka kiasi cha chini cha salio la pochi kitakachotuma tahadhari ya salio kuwa chini:',
+                  ),
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: thresholdCtrl,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: ref.tr(
+                      'Alert Threshold (${household.currencySymbol})',
+                      'Kiwango cha Tahadhari (${household.currencySymbol})',
+                    ),
+                    prefixIcon: const Icon(Icons.notifications_active_outlined),
+                    hintText: 'e.g. 25000',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [20000, 30000, 50000, 100000].map((preset) {
+                    return ActionChip(
+                      label: Text(
+                        AppFormatters.formatCurrency(
+                          preset.toDouble(),
+                          symbol: household.currencySymbol,
+                        ),
+                        style: const TextStyle(fontSize: 11.5),
+                      ),
+                      onPressed: () {
+                        thresholdCtrl.text = preset.toString();
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(ref.tr('Cancel', 'Ghairi')),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final amount = AppFormatters.tryParseAmount(thresholdCtrl.text);
+                if (amount == null || amount < 0) return;
+
+                final repo = ref.read(householdLedgerRepositoryProvider);
+                final userId = ref.read(currentUserIdProvider);
+
+                await repo.updateHousehold(
+                  householdId: household.id,
+                  actorUserId: userId,
+                  name: household.name,
+                  description: household.description,
+                  address: household.address,
+                  currencyCode: household.currencyCode,
+                  currencySymbol: household.currencySymbol,
+                  lowBalanceThreshold: amount,
+                );
+                ref.read(ledgerRevisionProvider.notifier).state++;
+
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      backgroundColor: AppColors.primaryGreen,
+                      content: Text(
+                        ref.tr(
+                          'Alert threshold updated to ${AppFormatters.formatCurrency(amount, symbol: household.currencySymbol)}.',
+                          'Kiwango cha tahadhari kimesasishwa kuwa ${AppFormatters.formatCurrency(amount, symbol: household.currencySymbol)}.',
+                        ),
+                      ),
+                    ),
+                  );
+              },
+              child: Text(ref.tr('Save Threshold', 'Hifadhi Kiwango')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showEditProfileDialog() async {
     final user = ref.read(authControllerProvider).valueOrNull;
     if (user == null) return;
@@ -646,6 +772,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Divider(),
                   ListTile(
                     leading: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 20,
+                      color: AppColors.warning,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Low Balance Alert Threshold',
+                        'Kiwango cha Tahadhari ya Salio',
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${ref.tr('Alert when balance drops below', 'Tahadharisha salio likiwa chini ya')}: ${AppFormatters.formatCurrency(household?.lowBalanceThreshold ?? 25000, symbol: household?.currencySymbol ?? 'TSh')}',
+                    ),
+                    trailing: const Icon(Icons.edit_outlined, size: 16),
+                    onTap: _showLowBalanceThresholdDialog,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.edit_note_rounded,
+                      size: 20,
+                      color: AppColors.primaryGreen,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Household Details & Settings',
+                        'Taarifa za Kaya na Mipangilio',
+                      ),
+                    ),
+                    subtitle: Text(
+                      ref.tr(
+                        'Edit household name, address & settings',
+                        'Badilisha jina la kaya, anwani na mipangilio',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => context.push('/households/edit'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
                       Icons.cleaning_services_outlined,
                       size: 20,
                       color: AppColors.warning,
@@ -841,6 +1008,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     trailing: const Icon(Icons.edit_outlined, size: 16),
                     onTap: _showDailyReminderTimePicker,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 20,
+                      color: AppColors.warning,
+                    ),
+                    title: Text(
+                      ref.tr(
+                        'Wallet Balance Alert Threshold',
+                        'Kiwango cha Tahadhari ya Salio',
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${ref.tr('Alerts fire when balance drops to', 'Tahadhari inatoka salio likifikia')}: ${AppFormatters.formatCurrency(household?.lowBalanceThreshold ?? 25000, symbol: household?.currencySymbol ?? 'TSh')}',
+                    ),
+                    trailing: const Icon(Icons.edit_outlined, size: 16),
+                    onTap: _showLowBalanceThresholdDialog,
                   ),
                   const Divider(),
                   ListTile(

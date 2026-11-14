@@ -40,7 +40,7 @@ class NotificationAlertEvaluator {
       }
     }
 
-    // 1. Low Wallet Balance Check
+    // 1. Low Wallet Balance Check (Below User Threshold)
     if (wallet.availableBalance <= household.lowBalanceThreshold) {
       final dateKey =
           '${referenceDate.year}-${referenceDate.month}-${referenceDate.day}';
@@ -55,7 +55,7 @@ class NotificationAlertEvaluator {
               : NotificationSeverity.warning,
           title: 'Low Household Wallet Balance',
           body:
-              'Your household balance is running low (${AppFormatters.formatCurrency(wallet.availableBalance, symbol: household.currencySymbol)} remaining).',
+              'Your household wallet balance is ${AppFormatters.formatCurrency(wallet.availableBalance, symbol: household.currencySymbol)}, which is below your alert threshold of ${AppFormatters.formatCurrency(household.lowBalanceThreshold, symbol: household.currencySymbol)}.',
           relatedEntityType: 'wallet',
           relatedEntityId: wallet.id,
           dedupKey: 'low_balance_${household.id}_$dateKey',

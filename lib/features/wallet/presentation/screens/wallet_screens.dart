@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/utils/share_launcher.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../households/presentation/providers/household_providers.dart';
 import '../../domain/entities/wallet_entities.dart';
@@ -51,7 +52,7 @@ class _AddContributionScreenState extends ConsumerState<AddContributionScreen> {
     final household = ref.read(activeHouseholdProvider);
     if (household == null) return;
 
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim());
+    final amount = AppFormatters.tryParseAmount(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       setState(() => _errorMsg = 'Please enter a valid positive amount.');
       return;
@@ -338,7 +339,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final categoryId = _selectedCategoryId ?? categories.firstOrNull?.id;
     if (household == null || categoryId == null) return;
 
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim());
+    final amount = AppFormatters.tryParseAmount(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       setState(() => _errorMsg = 'Please enter a valid expense amount.');
       return;
@@ -369,14 +370,43 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         notes: _notesCtrl.text,
       );
       ref.read(ledgerRevisionProvider.notifier).state++;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Expense of ${AppFormatters.formatCurrency(amount, symbol: household.currencySymbol)} by ${member.displayName} recorded and deducted from wallet!',
-            ),
-          ),
+      final updatedWallet = repo.getWallet(
+        householdId: household.id,
+        actorUserId: userId,
+      );
+
+      // Trigger instant heads-up pop-up reminder immediately if balance is low or finished
+      if (updatedWallet.availableBalance <= household.lowBalanceThreshold) {
+        ShareLauncher.checkAndAutoSendHouseholdAlerts(
+          householdId: household.id,
+          householdName: household.name,
+          currencySymbol: household.currencySymbol,
+          availableBalance: updatedWallet.availableBalance,
+          lowBalanceThreshold: household.lowBalanceThreshold,
+          forceSendNow: true,
         );
+      }
+
+      if (mounted) {
+        if (updatedWallet.availableBalance <= household.lowBalanceThreshold) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.warningAmber,
+              content: Text(
+                '⚠️ Expense recorded! Wallet balance is ${AppFormatters.formatCurrency(updatedWallet.availableBalance, symbol: household.currencySymbol)}, below your alert threshold of ${AppFormatters.formatCurrency(household.lowBalanceThreshold, symbol: household.currencySymbol)}.',
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Expense of ${AppFormatters.formatCurrency(amount, symbol: household.currencySymbol)} by ${member.displayName} recorded and deducted from wallet!',
+              ),
+            ),
+          );
+        }
         context.pop();
       }
     } catch (e) {

@@ -52,5 +52,32 @@ class AppFormatters {
     final utc = input.toUtc();
     return utc.add(const Duration(hours: 3));
   }
+
+  /// Parses monetary amounts entered by users. Robustly handles:
+  /// - Commas: `15,000` -> `15000.0`
+  /// - Spaces: `15 000` -> `15000.0`
+  /// - Compact 'k' / 'K': `10k`, `10K`, `15k` -> `10000.0`, `15000.0`
+  /// - Compact 'm' / 'M': `1m`, `1.5m` -> `1000000.0`, `1500000.0`
+  /// - Plain numbers: `10000` -> `10000.0`
+  static double? tryParseAmount(String? input) {
+    if (input == null) return null;
+    final cleaned = input
+        .replaceAll(',', '')
+        .replaceAll(' ', '')
+        .trim()
+        .toLowerCase();
+    if (cleaned.isEmpty) return null;
+    if (cleaned.endsWith('k')) {
+      final value =
+          double.tryParse(cleaned.substring(0, cleaned.length - 1).trim());
+      return value != null ? value * 1000 : null;
+    }
+    if (cleaned.endsWith('m')) {
+      final value =
+          double.tryParse(cleaned.substring(0, cleaned.length - 1).trim());
+      return value != null ? value * 1000000 : null;
+    }
+    return double.tryParse(cleaned);
+  }
 }
 
