@@ -305,7 +305,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _notesCtrl = TextEditingController();
   String? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
-  String? _attachedReceiptName;
   bool _isSaving = false;
   String? _errorMsg;
 
@@ -368,9 +367,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         amount: amount,
         expenseDate: _selectedDate,
         notes: _notesCtrl.text,
-        receiptUrl: _attachedReceiptName != null
-            ? 'storage://household-receipts/${household.id}/$_attachedReceiptName'
-            : null,
       );
       ref.read(ledgerRevisionProvider.notifier).state++;
       if (mounted) {
@@ -741,25 +737,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Optional Notes',
                   prefixIcon: Icon(Icons.notes_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _attachedReceiptName =
-                        'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                  });
-                },
-                icon: Icon(
-                  _attachedReceiptName != null
-                      ? Icons.check_circle
-                      : Icons.camera_alt_outlined,
-                ),
-                label: Text(
-                  _attachedReceiptName != null
-                      ? 'Attached: $_attachedReceiptName'
-                      : 'Attach Receipt Image (Optional)',
                 ),
               ),
               const SizedBox(height: 24),
