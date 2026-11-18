@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/drift_ledger_storage.dart';
+import '../../../../core/database/migration/shared_preferences_migrator.dart';
 import '../../../../core/errors/app_exceptions.dart';
 import '../../../budgets/domain/entities/budget_entity.dart';
 import '../../../categories/domain/entities/expense_category.dart';
@@ -16,6 +19,7 @@ import '../../domain/entities/household_member.dart';
 import '../services/firestore_ledger_sync.dart';
 
 class HouseholdLedgerRepository {
+  final DriftLedgerStorage _driftStorage;
   final FirestoreLedgerSyncService _firestoreSync;
   final PredictionEngine _predictionEngine;
   final NotificationAlertEvaluator _alertEvaluator;
@@ -45,12 +49,15 @@ class HouseholdLedgerRepository {
       '$_localStoragePrefix${_activeUserId ?? 'local'}';
 
   HouseholdLedgerRepository({
+    AppDatabase? db,
+    DriftLedgerStorage? driftStorage,
     FirestoreLedgerSyncService? firestoreSync,
     PredictionEngine predictionEngine = const PredictionEngine(),
     NotificationAlertEvaluator alertEvaluator =
         const NotificationAlertEvaluator(),
     bool initializeDemoSeed = false,
-  })  : _firestoreSync = firestoreSync ?? const FirestoreLedgerSyncService(),
+  })  : _driftStorage = driftStorage ?? DriftLedgerStorage(db ?? AppDatabase()),
+        _firestoreSync = firestoreSync ?? const FirestoreLedgerSyncService(),
         _predictionEngine = predictionEngine,
         _alertEvaluator = alertEvaluator {
     if (initializeDemoSeed) {
@@ -59,6 +66,8 @@ class HouseholdLedgerRepository {
       _isSeeding = false;
     }
   }
+
+  DriftLedgerStorage get driftStorage => _driftStorage;
 
   Future<void> _syncRemote(Future<void> Function() op) async {
     try {
@@ -70,45 +79,14 @@ class HouseholdLedgerRepository {
     }
   }
 
-  /// Synchronizes the signed-in user's households and ledger data from Cloud Firestore
-  /// (falling back to the user's scoped on-device cache when offline).
+  /// Synchronizes the signed-in user's households and ledger data.
+  /// Always loads primary state from SQLite first so the app works completely offline.
   Future<void> syncForUser(String userId) async {
     if (userId.isEmpty) return;
-    if (_activeUserId != userId) {
+    if (_activeUserId != userId || _households.isEmpty) {
       _clearMaps();
       _activeUserId = userId;
       await restoreFromLocalStorage(userId: userId);
-    }
-
-    if (!_firestoreSync.isAvailable) return;
-    try {
-      final bundle = await _firestoreSync
-          .fetchAllForUser(userId)
-          .timeout(const Duration(seconds: 8));
-      if (bundle == null) return;
-
-      _clearMaps();
-      _households.addAll(bundle.households);
-      _walletsByHousehold.addAll(bundle.wallets);
-      _membersByHousehold.addAll(bundle.members);
-      _categoriesByHousehold.addAll(bundle.categories);
-      _contributionsByHousehold.addAll(bundle.contributions);
-      _expensesByHousehold.addAll(bundle.expenses);
-      _transactionsByHousehold.addAll(bundle.transactions);
-      _budgetsByHousehold.addAll(bundle.budgets);
-      _suppliesByHousehold.addAll(bundle.supplies);
-      _consumptionByHousehold.addAll(bundle.consumption);
-      _predictionsByHousehold.addAll(bundle.predictions);
-      _billsByHousehold.addAll(bundle.bills);
-      _notificationsByHousehold.addAll(bundle.notifications);
-      _auditLogsByHousehold.addAll(bundle.auditLogs);
-
-      for (final hId in _households.keys) {
-        _refreshHouseholdAlerts(hId);
-      }
-      await _persistSnapshot();
-    } catch (_) {
-      // Keep local/cached state if offline or timed out.
     }
   }
 
@@ -279,6 +257,16 @@ class HouseholdLedgerRepository {
     _auditLogsByHousehold[householdId] = [];
     _predictionsByHousehold[householdId] = predictions;
 
+    try {
+      await _driftStorage.saveHouseholdBundle(
+        household: household,
+        wallet: wallet,
+        members: members,
+        categories: categories,
+        supplies: supplies,
+      );
+    } catch (_) {}
+
     await _syncRemote(
       () => _firestoreSync.saveNewHousehold(
         household: household,
@@ -319,6 +307,9 @@ class HouseholdLedgerRepository {
       lowBalanceThreshold: lowBalanceThreshold,
     );
     _households[householdId] = updated;
+    try {
+      await _driftStorage.updateHouseholdRow(updated);
+    } catch (_) {}
     await _syncRemote(
       () => _firestoreSync.updateHousehold(
         updated,
@@ -775,25 +766,36 @@ class HouseholdLedgerRepository {
       walletTx,
     ];
 
+    final auditLog = AuditLogEntry(
+      id: _uuid.v4(),
+      householdId: householdId,
+      actorUserId: actorUserId,
+      entityType: 'contribution',
+      entityId: contribution.id,
+      action: 'create',
+      reason: 'Member contribution recorded',
+      newState: {
+        'member': member.displayName,
+        'amount': amount,
+        'balance_before': balanceBefore,
+        'balance_after': balanceAfter,
+      },
+      createdAt: DateTime.now(),
+    );
+
     _auditLogsByHousehold[householdId] = [
       ...(_auditLogsByHousehold[householdId] ?? const []),
-      AuditLogEntry(
-        id: _uuid.v4(),
-        householdId: householdId,
-        actorUserId: actorUserId,
-        entityType: 'contribution',
-        entityId: contribution.id,
-        action: 'create',
-        reason: 'Member contribution recorded',
-        newState: {
-          'member': member.displayName,
-          'amount': amount,
-          'balance_before': balanceBefore,
-          'balance_after': balanceAfter,
-        },
-        createdAt: DateTime.now(),
-      ),
+      auditLog,
     ];
+
+    try {
+      await _driftStorage.saveContributionBundle(
+        contribution: contribution,
+        updatedWallet: updatedWallet,
+        transaction: walletTx,
+        auditLog: auditLog,
+      );
+    } catch (_) {}
 
     await _syncRemote(
       () => _firestoreSync.saveContributionBundle(
@@ -932,26 +934,28 @@ class HouseholdLedgerRepository {
       walletTx,
     ];
 
+    final auditLog = AuditLogEntry(
+      id: _uuid.v4(),
+      householdId: householdId,
+      actorUserId: actorUserId,
+      entityType: 'expense',
+      entityId: expense.id,
+      action: 'create',
+      reason: 'Household expense recorded',
+      newState: {
+        'title': title.trim(),
+        'category': category.name,
+        'paid_by': member.displayName,
+        'amount': amount,
+        'balance_before': balanceBefore,
+        'balance_after': balanceAfter,
+      },
+      createdAt: DateTime.now(),
+    );
+
     _auditLogsByHousehold[householdId] = [
       ...(_auditLogsByHousehold[householdId] ?? const []),
-      AuditLogEntry(
-        id: _uuid.v4(),
-        householdId: householdId,
-        actorUserId: actorUserId,
-        entityType: 'expense',
-        entityId: expense.id,
-        action: 'create',
-        reason: 'Household expense recorded',
-        newState: {
-          'title': title.trim(),
-          'category': category.name,
-          'paid_by': member.displayName,
-          'amount': amount,
-          'balance_before': balanceBefore,
-          'balance_after': balanceAfter,
-        },
-        createdAt: DateTime.now(),
-      ),
+      auditLog,
     ];
 
     (ConsumptionRecord?, SupplyPrediction?) tracked = (null, null);
@@ -963,6 +967,16 @@ class HouseholdLedgerRepository {
         expense: expense,
       );
     }
+
+    try {
+      await _driftStorage.saveExpenseBundle(
+        expense: expense,
+        updatedWallet: updatedWallet,
+        transaction: walletTx,
+        auditLog: auditLog,
+        consumptionRecord: tracked.$1,
+      );
+    } catch (_) {}
 
     await _syncRemote(
       () => _firestoreSync.saveExpenseBundle(
@@ -1810,6 +1824,7 @@ class HouseholdLedgerRepository {
   // ---------------------------------------------------------------------------
 
   void _seedInitialTanzanianHouseholds() {
+    if (_households.isNotEmpty) return;
     const ownerId = 'user-admin-dida-001';
     const h1Id = 'household-my-family-001';
     const h2Id = 'household-my-apartment-002';
@@ -2623,11 +2638,48 @@ class HouseholdLedgerRepository {
   }
 
   /// Restores persisted household wallets, members, transactions, and supply records
-  /// from on-device SharedPreferences.
+  /// from on-device SQLite (Drift) with backward-compatible migration.
   Future<bool> restoreFromLocalStorage({String? userId}) async {
-    if (userId != null && userId.isNotEmpty) {
-      _activeUserId = userId;
+    final effectiveUserId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_activeUserId ?? 'local');
+    _activeUserId = effectiveUserId;
+
+    try {
+      // 1. One-time idempotent migration from legacy SharedPreferences if needed
+      final migrator = SharedPreferencesToDriftMigrator(_driftStorage.db);
+      await migrator.migrateIfNecessary(effectiveUserId);
+
+      // 2. Load primary state from Drift SQLite
+      final driftBundle = await _driftStorage.loadAllForUser(effectiveUserId);
+      if (driftBundle.households.isNotEmpty) {
+        _clearMaps();
+        _households.addAll(driftBundle.households);
+        _walletsByHousehold.addAll(driftBundle.wallets);
+        _membersByHousehold.addAll(driftBundle.members);
+        _categoriesByHousehold.addAll(driftBundle.categories);
+        _contributionsByHousehold.addAll(driftBundle.contributions);
+        _expensesByHousehold.addAll(driftBundle.expenses);
+        _transactionsByHousehold.addAll(driftBundle.transactions);
+        _budgetsByHousehold.addAll(driftBundle.budgets);
+        _suppliesByHousehold.addAll(driftBundle.supplies);
+        _consumptionByHousehold.addAll(driftBundle.consumption);
+        _billsByHousehold.addAll(driftBundle.bills);
+        _auditLogsByHousehold.addAll(driftBundle.auditLogs);
+
+        for (final hId in _households.keys) {
+          final supplies = _suppliesByHousehold[hId] ?? const [];
+          for (final s in supplies) {
+            _recomputePredictionForSupply(hId, s);
+          }
+          _refreshHouseholdAlerts(hId);
+        }
+        return true;
+      }
+    } catch (_) {
+      // Fall through to legacy SharedPreferences snapshot backup if needed
     }
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_localStorageKey);

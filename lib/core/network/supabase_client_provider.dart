@@ -71,12 +71,15 @@ class SyncStatusNotifier extends StateNotifier<ConnectivitySyncState> {
     );
   }
 
-  void setOfflineMode(bool offline) {
+  void setOfflineMode(bool offline, [int pendingCount = 0]) {
     state = state.copyWith(
       isOnline: !offline,
       syncStatus: offline ? SyncStatus.offlinePending : SyncStatus.synced,
+      pendingOperationsCount: pendingCount,
       lastSyncMessage: offline
-          ? 'Offline mode: Financial writes require ledger version verification before sync'
+          ? (pendingCount > 0
+              ? 'Offline mode: $pendingCount pending changes queued for sync'
+              : 'Offline mode: Financial writes will sync when online')
           : 'Reconnected and synced',
     );
   }

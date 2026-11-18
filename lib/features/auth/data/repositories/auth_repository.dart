@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/errors/app_exceptions.dart';
@@ -51,6 +53,71 @@ class FirebaseAuthRepository implements AuthRepository {
   final Map<String, String> _fallbackCredentialsByEmail = {};
   final Map<String, UserProfile> _fallbackProfilesByEmail = {};
 
+  static const String _authActiveUserKey = 'nyumbasmart_auth_active_user_v1';
+  static const String _authFallbackProfilesKey =
+      'nyumbasmart_auth_fallback_profiles_v1';
+  static const String _authFallbackCredsKey =
+      'nyumbasmart_auth_fallback_creds_v1';
+
+  Future<void> _saveActiveUserToPrefs(UserProfile user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_authActiveUserKey, jsonEncode(user.toJson()));
+    } catch (_) {}
+  }
+
+  Future<UserProfile?> _loadActiveUserFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_authActiveUserKey);
+      if (raw == null || raw.isEmpty) return null;
+      return UserProfile.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _ensureFallbackMapsLoaded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final profilesRaw = prefs.getString(_authFallbackProfilesKey);
+      if (profilesRaw != null && profilesRaw.isNotEmpty) {
+        final decoded = jsonDecode(profilesRaw) as Map<String, dynamic>;
+        for (final entry in decoded.entries) {
+          _fallbackProfilesByEmail[entry.key] =
+              UserProfile.fromJson(entry.value as Map<String, dynamic>);
+        }
+      }
+      final credsRaw = prefs.getString(_authFallbackCredsKey);
+      if (credsRaw != null && credsRaw.isNotEmpty) {
+        final decoded = jsonDecode(credsRaw) as Map<String, dynamic>;
+        for (final entry in decoded.entries) {
+          _fallbackCredentialsByEmail[entry.key] = entry.value.toString();
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveFallbackState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_fallbackActiveUser != null) {
+        await prefs.setString(
+          _authActiveUserKey,
+          jsonEncode(_fallbackActiveUser!.toJson()),
+        );
+      }
+      final profilesMap = {
+        for (final e in _fallbackProfilesByEmail.entries) e.key: e.value.toJson(),
+      };
+      await prefs.setString(_authFallbackProfilesKey, jsonEncode(profilesMap));
+      await prefs.setString(
+        _authFallbackCredsKey,
+        jsonEncode(_fallbackCredentialsByEmail),
+      );
+    } catch (_) {}
+  }
+
   FirebaseAuthRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
@@ -90,13 +157,18 @@ class FirebaseAuthRepository implements AuthRepository {
     final auth = _auth;
     final firestore = _firestore;
     if (auth == null || firestore == null) {
+      if (_fallbackActiveUser == null) {
+        _fallbackActiveUser = await _loadActiveUserFromPrefs();
+      }
       return _fallbackActiveUser;
     }
 
     final fbUser = auth.currentUser;
     if (fbUser == null) return null;
 
-    return _loadOrCreateProfileFromFirebaseUser(fbUser, firestore);
+    final profile = await _loadOrCreateProfileFromFirebaseUser(fbUser, firestore);
+    await _saveActiveUserToPrefs(profile);
+    return profile;
   }
 
   @override
@@ -128,6 +200,7 @@ class FirebaseAuthRepository implements AuthRepository {
     final auth = _auth;
     final firestore = _firestore;
     if (auth == null || firestore == null) {
+      await _ensureFallbackMapsLoaded();
       if (_fallbackProfilesByEmail.containsKey(normalizedEmail)) {
         throw const ValidationException(
           'An account with this email address already exists.',
@@ -143,6 +216,7 @@ class FirebaseAuthRepository implements AuthRepository {
       _fallbackCredentialsByEmail[normalizedEmail] = password;
       _fallbackProfilesByEmail[normalizedEmail] = profile;
       _fallbackActiveUser = profile;
+      await _saveFallbackState();
       return profile;
     }
 
@@ -195,12 +269,14 @@ class FirebaseAuthRepository implements AuthRepository {
     final auth = _auth;
     final firestore = _firestore;
     if (auth == null || firestore == null) {
+      await _ensureFallbackMapsLoaded();
       final storedPassword = _fallbackCredentialsByEmail[normalizedEmail];
       final existing = _fallbackProfilesByEmail[normalizedEmail];
       if (existing == null || storedPassword == null || storedPassword != password) {
         throw const ValidationException('Invalid email or password.');
       }
       _fallbackActiveUser = existing;
+      await _saveActiveUserToPrefs(existing);
       return existing;
     }
 
@@ -321,6 +397,7 @@ class FirebaseAuthRepository implements AuthRepository {
     if (auth == null || firestore == null) {
       _fallbackProfilesByEmail[updatedProfile.email] = updatedProfile;
       _fallbackActiveUser = updatedProfile;
+      await _saveFallbackState();
       return updatedProfile;
     }
 
@@ -368,6 +445,10 @@ class FirebaseAuthRepository implements AuthRepository {
       }
     }
     _fallbackActiveUser = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_authActiveUserKey);
+    } catch (_) {}
   }
 
   Future<UserProfile> _loadOrCreateProfileFromFirebaseUser(

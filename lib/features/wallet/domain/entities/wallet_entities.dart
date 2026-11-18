@@ -59,6 +59,37 @@ class HouseholdWallet extends Equatable {
         version,
         lastTransactionAt,
       ];
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'total_contributions': totalContributions,
+      'total_expenses': totalExpenses,
+      'total_adjustments': totalAdjustments,
+      'available_balance': availableBalance,
+      'version': version,
+      'last_transaction_at': lastTransactionAt?.toIso8601String(),
+    };
+  }
+
+  factory HouseholdWallet.fromJson(Map<String, dynamic> json) {
+    return HouseholdWallet(
+      id: json['id'] as String,
+      householdId: json['household_id'] as String,
+      totalContributions:
+          ((json['total_contributions'] ?? 0.0) as num).toDouble(),
+      totalExpenses: ((json['total_expenses'] ?? 0.0) as num).toDouble(),
+      totalAdjustments:
+          ((json['total_adjustments'] ?? 0.0) as num).toDouble(),
+      availableBalance:
+          ((json['available_balance'] ?? 0.0) as num).toDouble(),
+      version: ((json['version'] ?? 1) as num).toInt(),
+      lastTransactionAt: json['last_transaction_at'] != null
+          ? DateTime.parse(json['last_transaction_at'] as String)
+          : null,
+    );
+  }
 }
 
 enum RecordStatus {
@@ -126,6 +157,41 @@ class Contribution extends Equatable {
         idempotencyKey,
         createdAt,
       ];
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'member_id': memberId,
+      'member_name': memberName,
+      'recorded_by': recordedBy,
+      'amount': amount,
+      'contribution_date': contributionDate.toIso8601String(),
+      'description': description,
+      'status': status.name,
+      'idempotency_key': idempotencyKey,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Contribution.fromJson(Map<String, dynamic> json) {
+    return Contribution(
+      id: json['id'] as String,
+      householdId: json['household_id'] as String,
+      memberId: json['member_id'] as String,
+      memberName: json['member_name'] as String,
+      recordedBy: json['recorded_by'] as String,
+      amount: ((json['amount'] ?? 0.0) as num).toDouble(),
+      contributionDate: DateTime.parse(json['contribution_date'] as String),
+      description: json['description'] as String?,
+      status: RecordStatus.values.firstWhere(
+        (v) => v.name == json['status'],
+        orElse: () => RecordStatus.active,
+      ),
+      idempotencyKey: json['idempotency_key'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
 }
 
 class Expense extends Equatable {
@@ -203,6 +269,49 @@ class Expense extends Equatable {
         idempotencyKey,
         createdAt,
       ];
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'category_id': categoryId,
+      'category_name': categoryName,
+      'paid_by_member_id': paidByMemberId,
+      'paid_by_member_name': paidByMemberName,
+      'recorded_by': recordedBy,
+      'title': title,
+      'amount': amount,
+      'expense_date': expenseDate.toIso8601String(),
+      'notes': notes,
+      'receipt_url': receiptUrl,
+      'status': status.name,
+      'idempotency_key': idempotencyKey,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Expense.fromJson(Map<String, dynamic> json) {
+    return Expense(
+      id: json['id'] as String,
+      householdId: json['household_id'] as String,
+      categoryId: json['category_id'] as String,
+      categoryName: json['category_name'] as String,
+      paidByMemberId: json['paid_by_member_id'] as String,
+      paidByMemberName: json['paid_by_member_name'] as String,
+      recordedBy: json['recorded_by'] as String,
+      title: json['title'] as String,
+      amount: ((json['amount'] ?? 0.0) as num).toDouble(),
+      expenseDate: DateTime.parse(json['expense_date'] as String),
+      notes: json['notes'] as String?,
+      receiptUrl: json['receipt_url'] as String?,
+      status: RecordStatus.values.firstWhere(
+        (v) => v.name == json['status'],
+        orElse: () => RecordStatus.active,
+      ),
+      idempotencyKey: json['idempotency_key'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
 }
 
 enum WalletTransactionType {

@@ -178,6 +178,33 @@ class TrackedSupply extends Equatable {
         defaultUnit,
         isActive,
       ];
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'category_id': categoryId,
+      'name': name,
+      'supply_type': supplyType.name,
+      'default_unit': defaultUnit,
+      'is_active': isActive,
+    };
+  }
+
+  factory TrackedSupply.fromJson(Map<String, dynamic> json) {
+    return TrackedSupply(
+      id: json['id'] as String,
+      householdId: json['household_id'] as String,
+      categoryId: json['category_id'] as String?,
+      name: json['name'] as String,
+      supplyType: SupplyType.values.firstWhere(
+        (v) => v.name == json['supply_type'],
+        orElse: () => SupplyType.grocery,
+      ),
+      defaultUnit: json['default_unit'] as String,
+      isActive: json['is_active'] as bool? ?? true,
+    );
+  }
 }
 
 class ConsumptionRecord extends Equatable {

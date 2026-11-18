@@ -9,10 +9,15 @@ import '../../../wallet/domain/entities/wallet_entities.dart';
 import '../../data/repositories/household_ledger_repository.dart';
 import '../../domain/entities/household.dart';
 import '../../domain/entities/household_member.dart';
+import '../../../sync/presentation/providers/sync_providers.dart';
 
 final householdLedgerRepositoryProvider =
     Provider<HouseholdLedgerRepository>((ref) {
-  return HouseholdLedgerRepository(initializeDemoSeed: false);
+  final db = ref.watch(appDatabaseProvider);
+  return HouseholdLedgerRepository(
+    db: db,
+    initializeDemoSeed: false,
+  );
 });
 
 /// Incremented whenever a financial or consumption operation mutates repository state

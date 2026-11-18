@@ -11,6 +11,7 @@ import '../../../../core/utils/share_launcher.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../households/presentation/providers/household_providers.dart';
+import '../../../sync/presentation/providers/sync_providers.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
@@ -1073,6 +1074,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         );
                       }
                     },
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.sync_rounded,
+                      size: 20,
+                      color: AppColors.primaryGreen,
+                    ),
+                    title: const Text('Sync Now with Cloud Firestore'),
+                    subtitle: Text(
+                      syncState.lastSyncMessage ??
+                          'Pushes offline queue and pulls latest cloud records',
+                    ),
+                    trailing: syncState.syncStatus == SyncStatus.syncing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 20),
+                    onTap: syncState.syncStatus == SyncStatus.syncing
+                        ? null
+                        : () async {
+                            final success = await ref
+                                .read(offlineSyncCoordinatorProvider)
+                                .syncAll(force: true);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: success
+                                      ? AppColors.primaryGreen
+                                      : AppColors.expenseRed,
+                                  content: Text(
+                                    success
+                                        ? 'Cloud sync completed successfully.'
+                                        : 'Sync paused: offline or could not reach Firestore.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                   ),
                   const Divider(),
                   SwitchListTile(

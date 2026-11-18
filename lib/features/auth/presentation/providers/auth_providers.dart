@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../households/presentation/providers/household_providers.dart';
+import '../../../sync/presentation/providers/sync_providers.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../domain/entities/user_profile.dart';
 
@@ -86,6 +87,7 @@ class AuthController extends StateNotifier<AsyncValue<UserProfile?>> {
   Future<void> logout() async {
     await _repository.logout();
     try {
+      _ref.read(offlineSyncCoordinatorProvider).dispose();
       _ref.read(householdLedgerRepositoryProvider).clearSessionData();
       _ref.read(selectedHouseholdIdProvider.notifier).state = null;
       _ref.read(ledgerRevisionProvider.notifier).state++;
@@ -96,6 +98,7 @@ class AuthController extends StateNotifier<AsyncValue<UserProfile?>> {
   Future<void> _syncHouseholds(String userId) async {
     try {
       await _ref.read(householdLedgerRepositoryProvider).syncForUser(userId);
+      _ref.read(offlineSyncCoordinatorProvider).init(userId);
       _ref.read(ledgerRevisionProvider.notifier).state++;
     } catch (_) {
       // Offline cache continues transparently if cloud sync fails.
